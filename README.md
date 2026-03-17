@@ -3,24 +3,27 @@
 [![Release](https://img.shields.io/github/release/golang-standards/project-layout.svg?style=flat-square)](https://github.com/k-samuel/faceted/pkg/releases/latest)
 
 # Golang Faceted Search Library v3.2.1
-Experimental port of PHP k-samuel/faceted-search v3.2.1
-PHP Library https://github.com/k-samuel/faceted-search
+Port of PHP [k-samuel/faceted-search](https://github.com/k-samuel/faceted-search) branched from v3.2.1
 
-## Возможности
+Simplified and fast faceted search without using any additional servers such as ElasticSearch, etc.
 
-- Быстрый фасетный поиск без использования дополнительных серверов (ElasticSearch и т.д.)
-- Поддержка до 1,000,000+ записей с 10 свойствами
-- Агрегация фильтров (построение доступных значений фильтров)
-- Исключающие фильтры
-- Фильтры по диапазону (RangeFilter)
-- Фильтры с условием AND (ValueIntersectionFilter)
-- Сортировка результатов
-- Индексация числовых диапазонов (RangeIndexer, RangeListIndexer)
-- Два типа хранилищ: ArrayStorage и FixedArrayStorage
+It can easily process up to 500,000 items with 10 properties. Create individual indices for product groups or categories and you won't need to scale or use more complex tools for a long time.
 
+In addition to faceted filters, it supports exclusive filters.
 
-## Поддерживаемые типы значений
-На вход:
+## Features
+
+- Fast faceted search without using additional servers (ElasticSearch, etc.)
+- Support for up to 1,000,000+ records with 10 properties
+- Filter aggregation (building available filter values)
+- Exclusion filters
+- Range filters (RangeFilter)
+- Filters with AND conditions (ValueIntersectionFilter)
+- Result sorting
+- Indexing of numeric ranges (RangeIndexer, RangeListIndexer)
+
+## Supported value types
+Input:
 ```go
 bool
 int
@@ -34,16 +37,15 @@ float64
 map[string]interface{}
 ```
 
-*Интерфейсы дложны содержать примитивы перечисленные в этом списке*
+*Interfaces must contain the primitives listed in this list*
 
-Результаты агрегации search.Aggregate() содержат список доступных значений фильтров, который приведен к типу string, обратите на это внимание. Это упрощает обработку структуры результатов.
+The results of search.Aggregate() contain a list of available filter values, cast to a string type. Note that this simplifies processing the result structure.
 
-Если этих типов недостаточно, необходимо заинжектить свой value.ValueConverterInterface:
+If these types are insufficient, you need to inject your own value.ValueConverterInterface:
 
 ```go
 import(
     "github.com/k-samuel/faceted"
-    "github.com/k-samuel/faceted/pkg/index"
     "github.com/k-samuel/faceted/pkg/value"
  )
 //...
@@ -52,7 +54,6 @@ search := faceted.NewSearch()
 // Injecting value converter.
 // Here you can set your own value.ValueConverter interface realisation
 search = search.WithValueConverter(value.NewValueConverterDefault())
-searchIndex, err := search.NewIndex(faceted.ArrayStorage)
 //...
 
 ```
@@ -80,36 +81,37 @@ Search index should be created in one thread before using. Currently, Index hash
 It can cause problems in concurrent writes and reads.
 
 
-## Установка
+## Install
 
 ```bash
 go get github.com/k-samuel/faceted
 ```
 
-## Структура проекта
+## Project structure
 
 ```
 pkg/
-├── filter/          # Фильтры (ValueFilter, RangeFilter, ExcludeValueFilter, etc.)
-├── index/           # Индекс (Index, Profile)
-├── indexer/         # Индексеры (RangeIndexer, RangeListIndexer)
-├── intersection/    # Пересечения (ArrayIntersection)
-├── query/           # Запросы (SearchQuery, AggregationQuery, Sort)
-├── sort/            # Сортировка (Filters, AggregationResults, ArrayResults)
-├── storage/         # Хранилища и сканнер (ArrayStorage, Scanner)
+├── filter/          # Filters (ValueFilter, RangeFilter, ExcludeValueFilter, etc.)
+├── index/           # Indexes (Index)
+├── indexer/         # Indexers (RangeIndexer, RangeListIndexer)
+├── intersection/    # Intersections (ArrayIntersection)
+├── query/           # Query (SearchQuery, AggregationQuery, Sort)
+├── sort/            # Result sorters (AggregationResults, ArrayResults)
+├── storage/         # Storages and scanners (ArrayStorage, Scanner)
 cmd/
+├── demo/            # Demo application
 ├── perf/            # Performance test
 ├── perf-data/       # Performance test data generator
 └── tests/           # Unit tests
     └── data/        # Generated test data for performance test
-main.go              # Пример использования
+main.go              # Simple examples
 go.mod
 ```
 
 
-## Быстрый старт
+## Quick start
 
-### Создание индекса
+### Creating an index
 
 ```go
 package main
@@ -121,12 +123,12 @@ import (
 )
 
 func main() {
-    // Создание индекса
+    // Create Index
     search := faceted.NewSearch()
     searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
     storage := searchIndex.GetStorage()
 
-    // Добавление данных
+    // Add data
     data := []map[string]interface{}{
         {"id": 7, "color": "black", "price": 100, "sale": true, "size": 36},
         {"id": 9, "color": "green", "price": 100, "sale": true, "size": 40},
@@ -138,12 +140,12 @@ func main() {
         storage.AddRecord(recordId, item)
     }
 
-    // Оптимизация индекса
+    // Index optimization
     storage.Optimize()
 }
 ```
 
-### Поиск с фильтрами
+### Search with filters
 
 ```go
 import (
@@ -154,27 +156,28 @@ import (
 search := faceted.NewSearch()
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
 storage := searchIndex.GetStorage()
-// Создание фильтров
+
+// Create filters
 filters := []filter.FilterInterface{
     search.NewValueFilter("color", []interface{}{"black", "green"}), // OR условие
     search.NewRangeFilter("size", search.NewRangeValue(36, 40),
 }
 
-// Поиск
+// Search
 searchQuery := search.NewSearchQuery().Filters(filters)
 records := searchIndex.Query(searchQuery)
 ```
 
-### Агрегация (построение доступных фильтров)
+### Aggregation (building available filters)
 
 ```go
 search := faceted.NewSearch()
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-// Агрегация без подсчёта количества
+// Aggregation without counting the quantity
 aggQuery := search.NewAggregationQuery().Filters(filters)
 aggData := searchIndex.Aggregate(aggQuery)
 
-// Агрегация с подсчётом и сортировкой
+// Aggregation with counting and sorting
 aggQuery2 := search.NewAggregationQuery().
     Filters(filters).
     CountItems(true).
@@ -195,38 +198,39 @@ filters := []filter.FilterInterface{
 records := searchIndex.Query(search.NewSearchQuery().Filters(filters))
 ```
 
-### ValueIntersectionFilter (AND условие)
+### ValueIntersectionFilter (AND condition)
 
 ```go
 search := faceted.NewSearch()
-// Для полей с несколькими значениями
+// For fields with multiple values
 // Record: {"purpose": ["hunting", "fishing", "sports"]}
 filter := search.NewValueIntersectionFilter("purpose", []interface{}{"hunting", "fishing"})
-// Найдёт записи, где есть И hunting, И fishing
+/ Finds records that contain both hunting and fishing
 ```
 
-### RangeIndexer для числовых диапазонов
+### RangeIndexer for numeric ranges
 
 ```go
 search := faceted.NewSearch()
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
 storage := searchIndex.GetStorage()
-// Создание индексера с шагом 100
+
+// Create an indexer with a step of 100
 rangeIndexer, _ := search.NewRangeIndexer(100)
 storage.AddIndexer("price", rangeIndexer)
 
-// Добавление данных
+// Add data
 storage.AddRecord(1, map[string]interface{}{"price": 90})
 storage.AddRecord(2, map[string]interface{}{"price": 150})
 
-// Поиск по диапазону
+// Search by range
 filters := []filter.FilterInterface{
     search.NewRangeFilter("price", search.NewRangeValue(100,)),
 }
 records := searchIndex.Query(search.NewSearchQuery().Filters(filters))
 ```
 
-### RangeListIndexer для пользовательских диапазонов
+### RangeListIndexer for custom ranges
 
 ```go
 search := faceted.NewSearch()
@@ -236,29 +240,29 @@ rangeIndexer, _ := search.NewRangeListIndexer([]int{100, 500, 1000})
 searchIndex.GetStorage().AddIndexer("price", rangeIndexer)
 ```
 
-### Сортировка результатов
+### Sorting results
 
 ```go
 search := faceted.NewSearch()
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-// Сортировка по убыванию цены
+// Sort by price descending
 searchQuery := search.NewSearchQuery().
     Filters(filters).
     Sort("price", query.SortDesc, query.SortNumeric)
 records := searchIndex.Query(searchQuery)
 ```
 
-### Экспорт/Импорт индекса
+### Index Export/Import
 
 ```go
 search := faceted.NewSearch()
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
 storage := searchIndex.GetStorage()
 
-// Экспорт
+// Export
 indexData := storage.Export()
 
-// Импорт
+// Import
 searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
 searchIndex.GetStorage().SetData(indexData)
 ```
@@ -267,37 +271,36 @@ searchIndex.GetStorage().SetData(indexData)
 
 ### Фильтры
 
-| Фильтр | Описание |
-|--------|----------|
-| `ValueFilter` | Фильтр по значению (OR условие для нескольких значений) |
-| `ValueIntersectionFilter` | Фильтр по значениям (AND условие) |
-| `RangeFilter` | Фильтр по диапазону (min, max) |
-| `ExcludeValueFilter` | Исключение по значению |
-| `ExcludeRangeFilter` | Исключение по диапазону |
+| Filter | Description |
+|--------|---------|
+| `ValueFilter` | Value filter (OR condition for multiple values) |
+| `ValueIntersectionFilter` | Value filter (AND condition) |
+| `RangeFilter` | Range filter (min, max) |
+| `ExcludeValueFilter` | Value exclusion |
+| `ExcludeRangeFilter` | Range exclusion |
 
 ### Query
 
-| Query | Описание |
+| Query | Description |
 |-------|----------|
-| `SearchQuery` | Поисковый запрос с фильтрами и сортировкой |
-| `AggregationQuery` | Запрос агрегации для построения доступных фильтров |
-| `Order` | Настройки сортировки |
-| `AggregationSort` | Настройки сортировки агрегации |
+| `SearchQuery` | Search query with filters and sorting |
+| `AggregationQuery` | Aggregation query for building available filters |
+| `Sort` | Sorting settings |
+| `AggregationSort` | Aggregation sorting settings |
 
 ### Storage
 
-| Storage | Описание |
+| Storage | Description |
 |---------|----------|
-| `ArrayStorage` | Быстрое хранилище на основе map |
+| `ArrayStorage` | Fast map-based storage |
 
-
-### Запуск демо приложения
+### Demo application
 
 ```bash
 cd cmd/demo
 go run main.go
 ```
-Запустится локальный web сервер http://127.0.0.1:8080/
+The local web server will start at http://127.0.0.1:8080/
 
 ![](docs/pic.png)
 
@@ -305,24 +308,20 @@ go run main.go
 ### Test
 ` go test  ./tests  -coverpkg  ./pkg/... -v -coverprofile=cover.out && go tool cover -html=cover.out -o cover.html `
 
-### Интеграционный тест производительности (аналог PHP tests/performance/find.php)
-Внимание, запускается из корневой папки
+### Integration performance test (similar to PHP tests/performance/find.php)
+Note: Runs from the project root directory.
 ```bash
-# Создайте тестовый набор данных (нужно сделать один раз)
+# Create a test dataset (only needs to be done once)
 go run cmd/perf-data/main.go -size 100000
-# Запустите тест
+# Run the test
 go run cmd/perf/main.go -size 100000
 ```
 
-
-
-### Запуск простых примеров
+### Simple Examples
 ```bash
  go run examples/sample/main.go
 ```
 
+## License
 
-
-## Лицензия
-
-MIT License - см. оригинальный проект https://github.com/k-samuel/faceted-search
+MIT License
