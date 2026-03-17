@@ -1,4 +1,4 @@
-[![Go](https://github.com/k-samuel/faceted/pkg/actions/workflows/go.yml/badge.svg)](https://github.com/k-samuel/faceted/pkg/actions/workflows/go.yml)
+[![Go](https://github.com/k-samuel/faceted/actions/workflows/go.yml/badge.svg)](https://github.com/k-samuel/faceted/actions/workflows/go.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/k-samuel/faceted?style=flat-square)](https://goreportcard.com/report/github.com/k-samuel/faceted)
 [![Release](https://img.shields.io/github/release/golang-standards/project-layout.svg?style=flat-square)](https://github.com/k-samuel/faceted/pkg/releases/latest)
 
