@@ -12,21 +12,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/k-samuel/faceted"
-	"github.com/k-samuel/faceted/pkg/filter"
-	"github.com/k-samuel/faceted/pkg/index"
-	"github.com/k-samuel/faceted/pkg/query"
-	//	"github.com/k-samuel/faceted/pkg/query"
+	"github.com/k-samuel/faceted/search"
 )
 
 // -----
 // go test ./tests/perf -bench . -benchmem
 // go test ./tests/perf -bench . -benchmem -cpuprofile=cpu.out -memprofile=mem.out -memprofilerate=1 performance_test.go
+// go test ./tests/perf -bench . -benchmem -cpuprofile="cpu.out" -memprofile="mem.out" -memprofilerate=1 performance_test.go
+// go tool pprof -http=:8081 mem.out
+// go tool pprof -http=:8081 cpu.out
 // go tool pprof -callgrind -output callgrind.c.out cpu.out
 // go tool pprof -callgrind -output callgrind.m.out mem.out
 
-var testIndex index.IndexInterface
-var search *faceted.Search
+var testIndex *search.Db
+var provider *search.Container
 var datasetFilePrefix = ".test.dataset."
 var results = 100000
 var datasetFile string
@@ -39,7 +38,7 @@ func init() {
 	if _, err := os.Stat(datasetFile); errors.Is(err, os.ErrNotExist) {
 		CreateDataset()
 	}
-	search = faceted.NewSearch()
+	provider = search.NewContainer()
 	testIndex = CreateIndex()
 }
 
@@ -109,23 +108,23 @@ func CreateDataset() {
 	fmt.Println("Dataset: ", time.Since(start))
 }
 
-func createFilters() []filter.FilterInterface {
-	return []filter.FilterInterface{
+func createFilters() []search.FilterInterface {
+	return []search.FilterInterface{
 		search.NewValueFilter("color", []string{"black"}),
 		search.NewValueFilter("warehouse", []string{"789", "45", "65", "1", "10"}),
 		search.NewValueFilter("type", []string{"normal", "middle"}),
 	}
 }
 
-func CreateIndex() index.IndexInterface {
+func CreateIndex() *search.Db {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	startM := m.Alloc
 	start := time.Now()
 	var result map[string]interface{}
 
-	var localIndex index.IndexInterface
-	localIndex, _ = search.NewIndex(faceted.ArrayStorage)
+	var localIndex *search.Db
+	localIndex = provider.NewDb()
 	storage := localIndex.GetStorage()
 
 	file, err := os.Open(datasetFile)
@@ -193,7 +192,7 @@ func BenchmarkFindAndSort(b *testing.B) {
 	filters := createFilters()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testIndex.Query(search.NewSearchQuery().Filters(filters).Sort("quantity", query.SortDesc, query.SortRegular))
+		testIndex.Query(search.NewSearchQuery().Filters(filters).Sort("quantity", search.SortDesc, search.SortTypeNumbers))
 	}
 }
 
@@ -202,14 +201,14 @@ func BenchmarkSearch(b *testing.B) {
 	filters := createFilters()
 
 	start := time.Now()
-	res := testIndex.Query(search.NewSearchQuery().Filters(filters))
+	res, _ := testIndex.Query(search.NewSearchQuery().Filters(filters))
 	duration := time.Since(start)
 	b.Log(" Find: ", duration, " Results: ", len(res))
 
 	runtime.GC()
 
 	start = time.Now()
-	filterRes := testIndex.Aggregate(search.NewAggregationQuery().Filters(filters))
+	filterRes, _ := testIndex.Aggregate(search.NewAggregationQuery().Filters(filters))
 	duration = time.Since(start)
 	b.Log(" Aggregate filters: ", duration, " filters: ", len(filterRes))
 

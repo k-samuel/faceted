@@ -1,62 +1,33 @@
 [![Go](https://github.com/k-samuel/faceted/actions/workflows/go.yml/badge.svg)](https://github.com/k-samuel/faceted/actions/workflows/go.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/k-samuel/faceted?style=flat-square)](https://goreportcard.com/report/github.com/k-samuel/faceted)
+[![Go Report Card](https://goreportcard.com/badge/github.com/k-samuel/faceted)](https://goreportcard.com/report/github.com/k-samuel/faceted)
 [![Release](https://img.shields.io/github/release/golang-standards/project-layout.svg?style=flat-square)](https://github.com/k-samuel/faceted/pkg/releases/latest)
 
-# Golang Faceted Search Library v3.2.1
-Port of PHP [k-samuel/faceted-search](https://github.com/k-samuel/faceted-search) branched from v3.2.1
+# Golang Faceted Search Library 3.x
+Port of PHP [k-samuel/faceted-search](https://github.com/k-samuel/faceted-search) branched from v3.2.4
 
 Simplified and fast faceted search without using any additional servers such as ElasticSearch, etc.
 
-It can easily process up to 500,000 items with 10 properties. Create individual indices for product groups or categories and you won't need to scale or use more complex tools for a long time.
+It can easily process up to 1,000,000 items with 10 properties. Create individual indices for product groups or categories and you won't need to scale or use more complex tools for a long time.
 
 In addition to faceted filters, it supports exclusive filters.
 
-## Features
+The library is designed for use with classic databases.
+It allows you to quickly build aggregates for filters and filter data by query.
+It returns a list of record IDs that need to be retrieved from the database for display to the client.
+Optimized for high-speed construction of complex aggregates.
 
-- Fast faceted search without using additional servers (ElasticSearch, etc.)
-- Support for up to 1,000,000+ records with 10 properties
+## Features
+- Fast standalone inmemory faceted search without using additional servers (ElasticSearch, etc.)
+- Support unstructured sets of fields
+- Support 1,000,000+ records with 10 properties
 - Filter aggregation (building available filter values)
-- Exclusion filters
 - Range filters (RangeFilter)
+- Exclusion filters (ExcludeValueFilter, ExcludeRangeFilter)
 - Filters with AND conditions (ValueIntersectionFilter)
 - Result sorting
-- Indexing of numeric ranges (RangeIndexer, RangeListIndexer)
+- Fast Indexing of numeric ranges (RangeIndexer, RangeListIndexer)
 
-## Supported value types
-Input:
-```go
-bool
-int
-int64
-float32
-float64
-[]int
-[]int64
-[]string
-[]interface{}
-map[string]interface{}
-```
 
-*Interfaces must contain the primitives listed in this list*
-
-The results of search.Aggregate() contain a list of available filter values, cast to a string type. Note that this simplifies processing the result structure.
-
-If these types are insufficient, you need to inject your own value.ValueConverterInterface:
-
-```go
-import(
-    "github.com/k-samuel/faceted"
-    "github.com/k-samuel/faceted/pkg/value"
- )
-//...
-// Create index using Factory
-search := faceted.NewSearch()
-// Injecting value converter.
-// Here you can set your own value.ValueConverter interface realisation
-search = search.WithValueConverter(value.NewValueConverterDefault())
-//...
-
-```
 
 ### Golang version benchmark
 
@@ -65,13 +36,13 @@ Bench Golang (1.25) vs PHP (8.4.4 Opcache JIT, noxdebug) 1M records
 |                         | GO         |     PHP   | 
 |:------------------------|-----------:|----------:|
 | Total Memory, Mb        |  134 Mb    | 417 Mb    |
-| Find                    |  0.051789  | 0.022873  |
-| Find & Sort             |  0.066998  | 0.030061  |
-| Find (unsets)           |  0.067185  | 0.030475  |
-| Find (ranges)           |  0.068525  | 0.031425  |
-| Filters                 |  0.215391  | 0.065416  |
-| Filters & count         |  0.390790  | 0.133543  |
-| Filters & count & exc   |  0.423006  | 0.146758  |
+| Find                    |  0.047491  | 0.022873  |
+| Find & Sort             |  0.055521  | 0.030061  |
+| Find (unsets)           |  0.061028  | 0.030475  |
+| Find (ranges)           |  0.066272  | 0.031425  |
+| Filters                 |  0.165654  | 0.065416  |
+| Filters & count         |  0.327895  | 0.133543  |
+| Filters & count & exc   |  0.413054  | 0.146758  |
 
 
 
@@ -90,22 +61,23 @@ go get github.com/k-samuel/faceted
 ## Project structure
 
 ```
-pkg/
-├── filter/          # Filters (ValueFilter, RangeFilter, ExcludeValueFilter, etc.)
-├── index/           # Indexes (Index)
-├── indexer/         # Indexers (RangeIndexer, RangeListIndexer)
-├── intersection/    # Intersections (ArrayIntersection)
-├── query/           # Query (SearchQuery, AggregationQuery, Sort)
-├── sort/            # Result sorters (AggregationResults, ArrayResults)
-├── storage/         # Storages and scanners (ArrayStorage, Scanner)
-cmd/
-├── demo/            # Demo application
-├── perf/            # Performance test
-├── perf-data/       # Performance test data generator
-└── tests/           # Unit tests
-    └── data/        # Generated test data for performance test
-main.go              # Simple examples
-go.mod
+faceted/
+├── search/              # Main library
+│   ├── indexer/         # Indexers (RangeIndexer, RangeListIndexer)
+│   ├── value/           # Value converter (Converter)
+│   ├── container.go     # Container factory
+│   ├── db.go            # Main DB struct
+│   └── ...
+├── cmd/
+│   ├── perf/            # Performance test
+│   └── perf-data/       # Performance test data generator
+├── examples/
+│   ├── sample/          # Simple examples
+│   └── demo/            # Demo application
+├── tests/               # Unit tests
+│   └── data/            # Generated test data for performance test
+├── go.mod
+└── go.sum
 ```
 
 
@@ -117,16 +89,14 @@ go.mod
 package main
 
 import (
-    "github.com/k-samuel/faceted"
-    "github.com/k-samuel/faceted/pkg/filter"
-    "github.com/k-samuel/faceted/pkg/query"
+    "github.com/k-samuel/faceted/search"
 )
 
 func main() {
-    // Create Index
-    search := faceted.NewSearch()
-    searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-    storage := searchIndex.GetStorage()
+
+    // Create Search Index using dependency factory
+    db := search.NewContainer().NewDb()
+    storage := db.GetStorage()
 
     // Add data
     data := []map[string]interface{}{
@@ -149,74 +119,75 @@ func main() {
 
 ```go
 import (
-    "github.com/k-samuel/faceted"
-    "github.com/k-samuel/faceted/filter"
-    "github.com/k-samuel/faceted/query"
+    "github.com/k-samuel/faceted/search"
 )
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-storage := searchIndex.GetStorage()
+
+db := search.NewContainer().NewDb()
 
 // Create filters
-filters := []filter.FilterInterface{
-    search.NewValueFilter("color", []interface{}{"black", "green"}), // OR условие
-    search.NewRangeFilter("size", search.NewRangeValue(36, 40),
+filters := []search.FilterInterface{
+    search.NewValueFilter("color", []interface{}{"black", "green"}), // OR condition
+    search.NewRangeFilter("size", search.NewRangeValue(36, 40)),
 }
 
 // Search
 searchQuery := search.NewSearchQuery().Filters(filters)
-records := searchIndex.Query(searchQuery)
+records := db.Query(searchQuery)
 ```
 
 ### Aggregation (building available filters)
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
+db := search.NewContainer().NewDb()
 // Aggregation without counting the quantity
 aggQuery := search.NewAggregationQuery().Filters(filters)
-aggData := searchIndex.Aggregate(aggQuery)
-
+aggData, err := db.Aggregate(aggQuery)
+//......
 // Aggregation with counting and sorting
 aggQuery2 := search.NewAggregationQuery().
     Filters(filters).
     CountItems(true).
-    Sort(query.SortAsc, query.SortRegular)
-aggData2 := searchIndex.Aggregate(aggQuery2)
+    Sort(search.SortAsc, search.SortAsc)
+aggData2, err := db.Aggregate(aggQuery2)
 ```
 
-### Исключающие фильтры
+### Exclusion filters
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-storage := searchIndex.GetStorage()
-filters := []filter.FilterInterface{
+db := search.NewContainer().NewDb()
+filters := []search.FilterInterface{
     search.NewValueFilter("sale", []interface{}{1}),
     search.NewExcludeValueFilter("color", []interface{}{"blue"}),
 }
-records := searchIndex.Query(search.NewSearchQuery().Filters(filters))
+records, err := db.Query(search.NewSearchQuery().Filters(filters))
 ```
 
 ### ValueIntersectionFilter (AND condition)
 
 ```go
-search := faceted.NewSearch()
+db := search.NewContainer().NewDb()
 // For fields with multiple values
 // Record: {"purpose": ["hunting", "fishing", "sports"]}
 filter := search.NewValueIntersectionFilter("purpose", []interface{}{"hunting", "fishing"})
-/ Finds records that contain both hunting and fishing
+// Finds records that contain both hunting and fishing
 ```
 
 ### RangeIndexer for numeric ranges
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-storage := searchIndex.GetStorage()
+import (
+    "github.com/k-samuel/faceted/search"
+    "github.com/k-samuel/faceted/search/indexer"
+)
+
+db := search.NewContainer().NewDb()
+storage := db.GetStorage()
 
 // Create an indexer with a step of 100
-rangeIndexer, _ := search.NewRangeIndexer(100)
+rangeIndexer, err := indexer.NewRangeIndexer(100)
+if err != nil {
+    // handle error
+}
 storage.AddIndexer("price", rangeIndexer)
 
 // Add data
@@ -224,52 +195,58 @@ storage.AddRecord(1, map[string]interface{}{"price": 90})
 storage.AddRecord(2, map[string]interface{}{"price": 150})
 
 // Search by range
-filters := []filter.FilterInterface{
-    search.NewRangeFilter("price", search.NewRangeValue(100,)),
+filters := []search.FilterInterface{
+    search.NewRangeFilter("price", search.NewRangeValue(100, 200)),
 }
-records := searchIndex.Query(search.NewSearchQuery().Filters(filters))
+records, err := db.Query(search.NewSearchQuery().Filters(filters))
 ```
 
 ### RangeListIndexer for custom ranges
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-// Создание диапазонов: 0-99, 100-499, 500-999, 1000+
-rangeIndexer, _ := search.NewRangeListIndexer([]int{100, 500, 1000})
-searchIndex.GetStorage().AddIndexer("price", rangeIndexer)
+import (
+    "github.com/k-samuel/faceted/search"
+    "github.com/k-samuel/faceted/search/indexer"
+)
+
+container := search.NewContainer()
+db := search.NewContainer().NewDb()
+// Create ranges: 0-99, 100-499, 500-999, 1000+
+rangeIndexer, err := indexer.NewRangeListIndexer([]int{100, 500, 1000})
+if err != nil {
+    // handle error
+}
+storage.AddIndexer("price", rangeIndexer)
 ```
 
 ### Sorting results
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
+db := search.NewContainer().NewDb()
 // Sort by price descending
 searchQuery := search.NewSearchQuery().
     Filters(filters).
-    Sort("price", query.SortDesc, query.SortNumeric)
-records := searchIndex.Query(searchQuery)
+    Sort("price", search.SortDesc, search.SortTypeNumbers)
+records := db.Query(searchQuery)
 ```
 
 ### Index Export/Import
 
 ```go
-search := faceted.NewSearch()
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-storage := searchIndex.GetStorage()
+db := search.NewContainer().NewDb()
+storage := db.GetStorage()
 
 // Export
 indexData := storage.Export()
 
 // Import
-searchIndex, _ := search.NewIndex(faceted.ArrayStorage)
-searchIndex.GetStorage().SetData(indexData)
+db2 := container.NewDb()
+db2.GetStorage().SetData(indexData)
 ```
 
 ## API
 
-### Фильтры
+### Filters
 
 | Filter | Description |
 |--------|---------|
@@ -292,17 +269,48 @@ searchIndex.GetStorage().SetData(indexData)
 
 | Storage | Description |
 |---------|----------|
-| `ArrayStorage` | Fast map-based storage |
+| `MapStorage` | Fast map-based storage |
+
+## Supported value types
+Input:
+```go
+bool
+int
+int64
+float32
+float64
+[]int
+[]int64
+[]string
+[]interface{}
+map[string]interface{}
+```
+
+*Interfaces must contain the primitives listed in this list*
+
+The results of search.Aggregate() contain a list of available filter values, cast to a string type. It simplifies processing the result structure.
+
+If these types are insufficient, you need to inject your own value.ValueConverterInterface (cast your type to string):
+
+```go
+import(
+    "github.com/k-samuel/faceted/search"
+    "github.com/k-samuel/faceted/search/value"
+ )
+// Here you can set your own value.ValueConverter interface realisation
+provider := search.NewContainer(search.WithValueConverter(value.NewConverter()))
+```
 
 ### Demo application
-
+[Demo application](examples/demo/)
 ```bash
-cd cmd/demo
+git clone https://github.com/k-samuel/faceted.git
+cd faceted/examples/demo
 go run main.go
 ```
 The local web server will start at http://127.0.0.1:8080/
 
-![](docs/pic.png)
+![](examples/demo/pic.png)
 
 
 ### Test

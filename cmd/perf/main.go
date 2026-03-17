@@ -9,10 +9,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/k-samuel/faceted"
-	"github.com/k-samuel/faceted/pkg/filter"
-	"github.com/k-samuel/faceted/pkg/index"
-	"github.com/k-samuel/faceted/pkg/query"
+	"github.com/k-samuel/faceted/search"
+	"github.com/k-samuel/faceted/search/indexer"
 )
 
 const (
@@ -85,16 +83,12 @@ func main() {
 	fmt.Printf("Loaded %d records in %.6f s\n", len(records), loadTime)
 
 	// Create index with FastStorage for better performance
-	search := faceted.NewSearch()
-	searchIndex, errs := search.NewIndex(faceted.ArrayStorage)
-	if errs != nil {
-		panic(errs)
-	}
-
-	storage := searchIndex.GetStorage()
+	provider := search.NewContainer()
+	db := provider.NewDb()
+	storage := db.GetStorage()
 
 	// Add RangeIndexer for price field (same as PHP version with step 250)
-	rangeIndexer, _ := search.NewRangeIndexer(250)
+	rangeIndexer, _ := indexer.NewRangeIndexer(250)
 	storage.AddIndexer("price", rangeIndexer)
 
 	// Add records to index
@@ -150,7 +144,7 @@ func main() {
 
 	// Index stats
 	resultData := []IndexStat{
-		{"Records", fmt.Sprintf("%d", searchIndex.GetCount()), ""},
+		{"Records", fmt.Sprintf("%d", storage.GetCount()), ""},
 		{"Index memory usage", fmt.Sprintf("%d Mb", memEnd.Alloc/1024/1024), ""},
 		{"Loading time", fmt.Sprintf("%.6f s", loadTime), ""},
 		{"Indexing time", fmt.Sprintf("%.6f s", indexTime), ""},
@@ -158,73 +152,73 @@ func main() {
 	}
 
 	// Define filters (same as PHP find.php)
-	filters := []filter.FilterInterface{
+	filters := []search.FilterInterface{
 		search.NewValueFilter("color", []interface{}{"black"}),
 		search.NewValueFilter("warehouse", []interface{}{789, 45, 65, 1, 10}),
 		search.NewValueFilter("type", []interface{}{"normal", "middle"}),
 	}
 
-	filters2 := []filter.FilterInterface{
+	filters2 := []search.FilterInterface{
 		search.NewValueFilter("color", []interface{}{"black"}),
 		search.NewValueFilter("warehouse", []interface{}{789, 45, 65, 1, 10}),
 		search.NewRangeFilter("price", search.NewRangeValue(1000, 5000)),
 	}
 
-	filters3 := []filter.FilterInterface{
+	filters3 := []search.FilterInterface{
 		search.NewValueFilter("color", []interface{}{"black"}),
 		search.NewValueFilter("warehouse", []interface{}{789, 45, 65, 1, 10}),
 		search.NewExcludeValueFilter("type", []interface{}{"good"}),
 	}
 
 	// Test functions
-	find := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	find := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		results := s.Query(search.NewSearchQuery().Filters(f))
+		results, _ := s.Query(search.NewSearchQuery().Filters(f))
 		return TestResult{"Find", time.Since(t).Seconds(), len(results), ""}
 	}
 
-	findAndSort := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	findAndSort := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
 
 		// Create query
-		queryObj := search.NewSearchQuery().Filters(f).Sort("quantity", query.SortDesc, query.SortNumeric)
+		queryObj := search.NewSearchQuery().Filters(f).Sort("quantity", search.SortDesc, search.SortTypeNumbers)
 
 		// Query with timing
 		t1 := time.Now()
-		results := s.Query(queryObj)
+		results, _ := s.Query(queryObj)
 		queryTime := time.Since(t1)
 
 		totalTime := time.Since(t)
 		return TestResult{"Find & Sort", totalTime.Seconds(), len(results), fmt.Sprintf("query=%.3f", queryTime.Seconds())}
 	}
 
-	aggregate := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	aggregate := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		_ = s.Aggregate(query.NewAggregationQuery().Filters(f))
+		_, _ = s.Aggregate(search.NewAggregationQuery().Filters(f))
 		return TestResult{"Filters", time.Since(t).Seconds(), len(f), ""}
 	}
 
-	aggregateAndCount := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	aggregateAndCount := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		_ = s.Aggregate(query.NewAggregationQuery().Filters(f).CountItems(true))
+		_, _ = s.Aggregate(search.NewAggregationQuery().Filters(f).CountItems(true))
 		return TestResult{"Filters & count", time.Since(t).Seconds(), len(f), ""}
 	}
 
-	aggregateAndCountWithExclude := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	aggregateAndCountWithExclude := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		_ = s.Aggregate(query.NewAggregationQuery().Filters(f).CountItems(true))
+		_, _ = s.Aggregate(search.NewAggregationQuery().Filters(f).CountItems(true))
 		return TestResult{"Filters & count & exc", time.Since(t).Seconds(), len(f), ""}
 	}
 
-	findWithRange := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	findWithRange := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		results := s.Query(query.NewSearchQuery().Filters(f))
+		results, _ := s.Query(search.NewSearchQuery().Filters(f))
 		return TestResult{"Find (ranges)", time.Since(t).Seconds(), len(results), ""}
 	}
 
-	findWithExclude := func(s index.IndexInterface, f []filter.FilterInterface) TestResult {
+	findWithExclude := func(s *search.Db, f []search.FilterInterface) TestResult {
 		t := time.Now()
-		results := s.Query(query.NewSearchQuery().Filters(f))
+		results, _ := s.Query(search.NewSearchQuery().Filters(f))
 		return TestResult{"Find (unsets)", time.Since(t).Seconds(), len(results), ""}
 	}
 
@@ -232,8 +226,8 @@ func main() {
 
 	tests := []struct {
 		name string
-		fn   func(index.IndexInterface, []filter.FilterInterface) TestResult
-		f    []filter.FilterInterface
+		fn   func(*search.Db, []search.FilterInterface) TestResult
+		f    []search.FilterInterface
 	}{
 		{"find", find, filters},
 		{"findAndSort", findAndSort, filters},
@@ -253,7 +247,7 @@ func main() {
 		runtime.ReadMemStats(&memBefore)
 		memBeforeMb := int64(memBefore.Alloc) / 1024 / 1024
 
-		result := test.fn(searchIndex, test.f)
+		result := test.fn(db, test.f)
 
 		var memAfter runtime.MemStats
 		runtime.ReadMemStats(&memAfter)
