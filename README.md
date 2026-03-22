@@ -314,7 +314,7 @@ The local web server will start at http://127.0.0.1:8080/
 
 
 ### Test
-` go test  ./tests  -coverpkg  ./pkg/... -v -coverprofile=cover.out && go tool cover -html=cover.out -o cover.html `
+` go test  ./search  -coverpkg  ./search/... -v -coverprofile=cover.out && go tool cover -html=cover.out -o cover.html `
 
 ### Integration performance test (similar to PHP tests/performance/find.php)
 Note: Runs from the project root directory.
