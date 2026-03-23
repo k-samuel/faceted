@@ -131,7 +131,8 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 	}
 
 	filteredRecords := make(map[int]struct{})
-	resultCache := make(map[string]map[int]struct{})
+	resultCache := NewResultCache(len(filters))
+	//make(map[string]map[int]struct{})
 
 	var err error
 
@@ -151,9 +152,9 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 			if err != nil {
 				return nil, err
 			}
-			resultCache[name] = res
+			resultCache.Add(&FilterResultCache{Name: name, Values: res})
 		}
-
+		resultCache.SortByCount()
 		// Merge results
 		filteredRecords = mergeFilters(resultCache, "")
 	} else if len(inputMap) > 0 {
@@ -203,41 +204,35 @@ func mapInputArray(inputRecords []int) map[int]struct{} {
 	return input
 }
 
-// mergeFilters merges filter results using optimized intersection.
-// Iterates over the smallest map for better performance.
-func mergeFilters(maps map[string]map[int]struct{}, skipKey string) map[int]struct{} {
-	// Find the smallest map to start with
-	var smallestKey string
-	smallestSize := int(^uint(0) >> 1)
+// mergeFilters merges filter results.
+func mergeFilters(cache *ResultCache, skipKey string) map[int]struct{} {
 
-	for key, mapData := range maps {
-		if skipKey != "" && key == skipKey {
-			continue
-		}
-		if len(mapData) < smallestSize {
-			smallestSize = len(mapData)
-			smallestKey = key
-		}
-	}
+	isFirst := true
 
-	if smallestKey == "" {
-		return make(map[int]struct{})
-	}
-
-	// Start with the smallest map
-	result := make(map[int]struct{}, smallestSize)
-	for k, v := range maps[smallestKey] {
-		result[k] = v
-	}
+	var result map[int]struct{}
 
 	// Intersect with other maps
-	for key, mapData := range maps {
-		if key == smallestKey || (skipKey != "" && key == skipKey) {
+	for _, mapData := range cache.Data {
+
+		if skipKey != "" && mapData.Name == skipKey {
 			continue
 		}
 
-		for k := range result {
-			if _, ok := mapData[k]; !ok {
+		if isFirst {
+			if len(mapData.Values) == 0 {
+				return make(map[int]struct{})
+			}
+			// Start with the smallest map
+			result = make(map[int]struct{}, len(mapData.Values))
+			for k, _ := range mapData.Values {
+				result[k] = struct{}{}
+			}
+			isFirst = false
+			continue
+		}
+
+		for k, _ := range result {
+			if _, ok := mapData.Values[k]; !ok {
 				delete(result, k)
 			}
 		}

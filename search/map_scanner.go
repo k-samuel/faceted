@@ -138,7 +138,7 @@ func (sc *MapScanner) GetAllRecordIdMap() map[int]struct{} {
 
 // aggregationScan performs the aggregation scan.
 func (sc *MapScanner) AggregationScan(
-	resultCache map[string]map[int]struct{},
+	resultCache *ResultCache,
 	filteredRecords map[int]struct{},
 	countRecords bool,
 	input map[int]struct{},
@@ -148,7 +148,7 @@ func (sc *MapScanner) AggregationScan(
 ) (map[string]map[string]interface{}, error) {
 
 	result := make(map[string]map[string]interface{})
-	cacheCount := len(resultCache)
+	cacheCount := len(resultCache.Filters)
 
 	// Index filters by field name
 	indexedFilters := make(map[string]FilterInterface)
@@ -167,7 +167,7 @@ func (sc *MapScanner) AggregationScan(
 
 		var recordIds map[int]struct{}
 		var err error
-		if _, ok := resultCache[filterName]; ok {
+		if _, ok := resultCache.Filters[filterName]; ok {
 			// Use cached result
 			if cacheCount > 1 {
 				if needSelfFiltering {

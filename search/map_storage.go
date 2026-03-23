@@ -134,9 +134,9 @@ func (s *MapStorage) Optimize() {
 	// Sort records by ID and values by record count
 	for fieldName, valueList := range s.data {
 		// Count records per value
-		valueCounts := make(map[string]int)
-		for value, list := range valueList {
-			valueCounts[value] = len(list)
+		//valueCounts := make(map[string]int)
+		for /*value*/ _, list := range valueList {
+			//valueCounts[value] = len(list)
 
 			// Sort records by ID (except for range indexers)
 			if _, hasIndexer := s.indexers[fieldName]; !hasIndexer {
@@ -144,23 +144,25 @@ func (s *MapStorage) Optimize() {
 			}
 		}
 
-		// Sort values by record count
-		sortedValues := make([]string, len(valueCounts))
-		i := 0
-		for value := range valueCounts {
-			sortedValues[i] = value
-			i++
-		}
-		sort.Slice(sortedValues, func(i, j int) bool {
-			return valueCounts[sortedValues[i]] < valueCounts[sortedValues[j]]
-		})
+		/*
+			// Sort values by record count
+			sortedValues := make([]string, len(valueCounts))
+			i := 0
+			for value := range valueCounts {
+				sortedValues[i] = value
+				i++
+			}
+			sort.Slice(sortedValues, func(i, j int) bool {
+				return valueCounts[sortedValues[i]] < valueCounts[sortedValues[j]]
+			})
 
-		// Rebuild valueList in sorted order
-		newList := make(map[string][]int)
-		for _, value := range sortedValues {
-			newList[value] = valueList[value]
-		}
-		s.data[fieldName] = newList
+			// Rebuild valueList in sorted order
+			newList := make(map[string][]int)
+			for _, value := range sortedValues {
+				newList[value] = valueList[value]
+			}
+			s.data[fieldName] = newList
+		*/
 	}
 }
 

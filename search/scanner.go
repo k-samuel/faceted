@@ -16,7 +16,7 @@ type ScannerInterface interface {
 
 	// Aggregate results
 	AggregationScan(
-		resultCache map[string]map[int]struct{},
+		resultCache *ResultCache,
 		filteredRecords map[int]struct{},
 		countRecords bool,
 		input map[int]struct{},
