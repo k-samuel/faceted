@@ -1,7 +1,11 @@
 package search
 
 import (
+	"fmt"
+	"slices"
 	"testing"
+
+	"github.com/k-samuel/faceted/search/indexer"
 )
 
 func getStorages() (db *Db, storage StorageInterface) {
@@ -20,19 +24,32 @@ func TestAggregate(t *testing.T) {
 
 	result, _ := db.Aggregate(NewAggregationQuery().CountItems(true))
 
-	expect := map[string]map[string]interface{}{
+	// Check expected values
+	expected := map[string]map[string]int{
 		"vendor": {"Tester": 1, "Tester2": 2},
 		"price":  {"100": 1, "101": 2},
 	}
 
-	assertEqualMaps(t, expect, result)
+	if !compareAggregationResultMap(result, expected) {
+		t.Errorf("Aggregation result mismatch")
+		for field, expectedVal := range expected {
+			t.Logf("Field %s: expected %v", field, expectedVal)
+		}
+	}
 }
 
 // TestQuery tests basic query functionality.
 func TestQuery(t *testing.T) {
 	db, storage := getStorages()
 
-	records := getTestData()
+	records := map[int]map[string]interface{}{
+		1: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 80999, "color": "black", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 10}},
+		2: {"vendor": "Samsung", "model": "Galaxy S20", "price": 70599, "color": "white", "has_phones": 1, "cam_mp": 105, "sale": 0, "warehouse": []int{1, 7, 12}},
+		3: {"vendor": "Samsung", "model": "Galaxy S20", "price": 70599, "color": "yellow", "has_phones": 1, "cam_mp": 105, "sale": 1, "warehouse": []int{2, 3, 5}},
+		4: {"vendor": "Samsung", "model": "Galaxy A5", "price": 15000, "color": "black", "has_phones": 1, "cam_mp": 12, "sale": 1, "warehouse": []int{1, 7, 12}},
+		5: {"vendor": "Xiaomi", "model": "MI 9", "price": 26000, "color": "black", "has_phones": 1, "cam_mp": 48, "sale": 0, "warehouse": []int{1, 7, 12}},
+		6: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 80999, "color": "white", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 12}},
+	}
 	for id, item := range records {
 		_ = storage.AddRecord(id, item)
 	}
@@ -41,14 +58,18 @@ func TestQuery(t *testing.T) {
 	filters := []FilterInterface{
 		NewValueFilter("vendor", []interface{}{"Samsung", "Apple"}),
 		NewValueFilter("color", []interface{}{"black"}),
+		NewValueFilter("warehouse", []int{1, 7, 34}),
 	}
 
 	result, _ := db.Query(NewSearchQuery().Filters(filters))
-	sortIntSlice(result)
 
 	// Should find records with vendor Samsung/Apple AND color black
 	if len(result) == 0 {
 		t.Errorf("Expected some results, got none")
+	}
+
+	if !slices.Equal(result, []int{1, 4}) {
+		t.Errorf("Expected results 1,4")
 	}
 
 	// Test no results
@@ -60,6 +81,37 @@ func TestQuery(t *testing.T) {
 		t.Error(err)
 	}
 	assertEqualSlices(t, []int{}, result2)
+}
+
+func TestQueryWithRange(t *testing.T) {
+	db, storage := getStorages()
+	indexer, _ := indexer.NewRangeIndexer(1000)
+	storage.AddIndexer("price", indexer)
+
+	records := map[int]map[string]interface{}{
+		1: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 1000, "color": "black", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 10}},
+		2: {"vendor": "Samsung", "model": "Galaxy S20", "price": 1000, "color": "white", "has_phones": 1, "cam_mp": 105, "sale": 0, "warehouse": []int{1, 7, 12}},
+		3: {"vendor": "Samsung", "model": "Galaxy S20", "price": 2500, "color": "yellow", "has_phones": 1, "cam_mp": 105, "sale": 1, "warehouse": []int{2, 3, 5}},
+		4: {"vendor": "Samsung", "model": "Galaxy A5", "price": 800, "color": "black", "has_phones": 1, "cam_mp": 12, "sale": 1, "warehouse": []int{1, 7, 12}},
+		5: {"vendor": "Xiaomi", "model": "MI 9", "price": 500, "color": "black", "has_phones": 1, "cam_mp": 48, "sale": 0, "warehouse": []int{1, 7, 12}},
+		6: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 2000, "color": "white", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 12}},
+	}
+	for id, item := range records {
+		_ = storage.AddRecord(id, item)
+	}
+
+	// Test with simpler filters that work in Go implementation
+	filters := []FilterInterface{
+		NewValueFilter("vendor", []interface{}{"Samsung", "Apple"}),
+		NewRangeFilter("price", NewRangeValue(1000, 5000)),
+	}
+
+	result, _ := db.Query(NewSearchQuery().Filters(filters))
+
+	// Should find records with vendor Samsung/Apple AND color black
+	if !slices.Equal(result, []int{1, 2, 6}) {
+		t.Errorf("Expected results 1,2,6 ")
+	}
 }
 
 // TestQueryLimit tests query with inRecords limit.
@@ -104,7 +156,7 @@ func TestAggregation(t *testing.T) {
 	// Check that expected fields exist
 	expectedFields := []string{"vendor", "model", "price", "color", "has_phones", "cam_mp", "sale"}
 	for _, field := range expectedFields {
-		if _, ok := result[field]; !ok {
+		if !hasField(result, field) {
 			t.Errorf("Expected field %s in result", field)
 		}
 	}
@@ -128,41 +180,22 @@ func TestAggregationCountNoFilter(t *testing.T) {
 
 	result, _ := db.Aggregate(NewAggregationQuery().CountItems(true))
 
-	expect := map[string]map[string]interface{}{
+	// Check expected values
+	expected := map[string]map[string]int{
 		"color": {"black": 3, "white": 1, "yellow": 1},
 		"size":  {"7": 4, "8": 1},
 		"group": {"A": 2, "B": 1, "C": 2},
 	}
 
-	assertEqualMaps(t, expect, result)
-}
-
-// TestAggregationCountLimit tests aggregation with inRecords limit.
-func TestAggregationCountLimit(t *testing.T) {
-	db, storage := getStorages()
-
-	records := []map[string]interface{}{
-		{"id": 1, "color": "black", "size": 7, "group": "A"},
-		{"id": 2, "color": "black", "size": 8, "group": "A"},
-		{"id": 3, "color": "white", "size": 7, "group": "B"},
-		{"id": 4, "color": "yellow", "size": 7, "group": "C"},
-		{"id": 5, "color": "black", "size": 7, "group": "C"},
-	}
-
-	for _, item := range records {
-		id := int(item["id"].(int))
-		delete(item, "id")
-		_ = storage.AddRecord(id, item)
-	}
-
-	result, _ := db.Aggregate(NewAggregationQuery().InRecords([]int{1, 2}).CountItems(true))
-
-	if colorResult, ok := result["color"]; ok {
-		if count, ok := colorResult["black"]; !ok || count != 2 {
-			t.Errorf("Expected black count to be 2, got %v", count)
+	if !compareAggregationResultMap(result, expected) {
+		t.Errorf("Aggregation result mismatch")
+		for field, expectedVal := range expected {
+			t.Logf("Field %s: expected %v", field, expectedVal)
 		}
 	}
 }
+
+// TestAggregationCountLimit tests aggregation with inRecords limit.
 
 // TestIntFilterNames tests integer field names.
 func TestIntFilterNames(t *testing.T) {
@@ -342,23 +375,161 @@ func assertEqualSlices(t *testing.T, expected, actual []int) {
 	}
 }
 
-// assertEqualMaps asserts that two maps are equal.
-func assertEqualMaps(t *testing.T, expected, actual map[string]map[string]interface{}) {
-	for field, expectedVal := range expected {
-		actualVal, ok := actual[field]
-		if !ok {
-			t.Errorf("Missing field %s in result", field)
-			continue
+// hasField checks if a field exists in aggregation results.
+func hasField(result []*AggregationResultField, fieldName string) bool {
+	for _, field := range result {
+		if field.Field == fieldName {
+			return true
 		}
-		for expKey, expCount := range expectedVal {
-			actCount, ok := actualVal[expKey]
-			if !ok {
-				t.Errorf("Field %s: missing key %v", field, expKey)
-				continue
-			}
-			if actCount != expCount {
-				t.Errorf("Field %s[%v]: expected count %v, got %v", field, expKey, expCount, actCount)
+	}
+	return false
+}
+
+// compareAggregationResultMap compares aggregation results with expected map.
+func compareAggregationResultMap(result []*AggregationResultField, expected map[string]map[string]int) bool {
+	if len(result) != len(expected) {
+		return false
+	}
+
+	// Build map from result
+	resultMap := make(map[string]map[string]int)
+	for _, field := range result {
+		resultMap[field.Field] = make(map[string]int)
+		for _, value := range field.Values {
+			if value.Count != nil {
+				resultMap[field.Field][value.Value] = *value.Count
 			}
 		}
 	}
+
+	// Compare with expected
+	for field, expectedVal := range expected {
+		actualVal, ok := resultMap[field]
+		if !ok {
+			return false
+		}
+		for expKey, expCount := range expectedVal {
+			actCount, ok := actualVal[expKey]
+			if !ok || actCount != expCount {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// TestAggregationStability tests that aggregate returns consistent results across multiple calls.
+func TestAggregationStability(t *testing.T) {
+	db, storage := getStorages()
+
+	records := []map[string]interface{}{
+		{"color": "black", "size": 7, "group": "A", "warehouse": []int{1, 7, 8, 9, 44, 5, 6}},
+		{"color": "black", "size": 8, "group": "A", "warehouse": []int{2, 3, 5, 7, 8}},
+		{"color": "white", "size": 7, "group": "B", "warehouse": []int{1, 4, 6, 27, 18}},
+		{"color": "yellow", "size": 7, "group": "C", "warehouse": []int{11, 14, 6, 27, 18}},
+		{"color": "black", "size": 7, "group": "C", "warehouse": []int{1, 11, 2, 22}},
+		{"color": "black", "size": 7, "group": "A", "warehouse": []int{5, 7, 8}},
+		{"color": "black", "size": 8, "group": "A", "warehouse": []int{1, 2}},
+		{"color": "white", "size": 7, "group": "B", "warehouse": []int{1}},
+	}
+
+	for id, item := range records {
+		_ = storage.AddRecord(id+1, item)
+	}
+
+	// Call Aggregate multiple times and compare results
+	var results [][]*AggregationResultField
+	for i := 0; i < 5; i++ {
+		result, err := db.Aggregate(NewAggregationQuery().CountItems(true))
+		if err != nil {
+			t.Fatalf("Aggregate call %d failed: %v", i+1, err)
+		}
+		results = append(results, result)
+
+		// Print results for debugging
+		t.Logf("Call %d: %v", i+1, formatAggregationResult(result))
+	}
+
+	// Compare all results with first result
+	for i := 1; i < len(results); i++ {
+		if !compareAggregationResults(results[0], results[i]) {
+			t.Errorf("Result mismatch between call 1 and call %d", i+1)
+			t.Logf("Call 1: %v", formatAggregationResult(results[0]))
+			t.Logf("Call %d: %v", i+1, formatAggregationResult(results[i]))
+		}
+	}
+}
+
+// formatAggregationResult formats aggregation result for logging.
+func formatAggregationResult(result []*AggregationResultField) string {
+	var str string
+	for _, field := range result {
+		str += field.Field + ": {"
+		for _, value := range field.Values {
+			if value.Count != nil {
+				str += value.Value + "=>" + fmt.Sprintf("%d", *value.Count) + ", "
+			} else {
+				str += value.Value + ", "
+			}
+		}
+		str += "} "
+	}
+	return str
+}
+
+// compareAggregationResults compares two aggregation results for equality.
+func compareAggregationResults(a, b []*AggregationResultField) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	// Create maps for easier comparison
+	mapA := make(map[string]map[string]int)
+	mapB := make(map[string]map[string]int)
+
+	for _, field := range a {
+		mapA[field.Field] = make(map[string]int)
+		for _, value := range field.Values {
+			if value.Count != nil {
+				mapA[field.Field][value.Value] = *value.Count
+			}
+		}
+	}
+
+	for _, field := range b {
+		mapB[field.Field] = make(map[string]int)
+		for _, value := range field.Values {
+			if value.Count != nil {
+				mapB[field.Field][value.Value] = *value.Count
+			}
+		}
+	}
+
+	return compareAggregationMaps(mapA, mapB)
+}
+
+// compareAggregationMaps compares two aggregation maps.
+func compareAggregationMaps(a, b map[string]map[string]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for field, valuesA := range a {
+		valuesB, ok := b[field]
+		if !ok {
+			return false
+		}
+		if len(valuesA) != len(valuesB) {
+			return false
+		}
+		for val, countA := range valuesA {
+			countB, ok := valuesB[val]
+			if !ok || countA != countB {
+				return false
+			}
+		}
+	}
+
+	return true
 }

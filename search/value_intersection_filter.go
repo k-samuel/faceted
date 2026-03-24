@@ -37,36 +37,8 @@ func (f *ValueIntersectionFilter) HasSelfFiltering() bool {
 }
 
 // FilterInput filters the faceted data with AND condition.
-func (f *ValueIntersectionFilter) FilterInput(scanner ScannerInterface, inputIdKeys map[int]struct{}, excludeRecords map[int]struct{}) error {
-	emptyInput := len(inputIdKeys) == 0
+func (f *ValueIntersectionFilter) FilterInput(scanner ScannerInterface, inputIdKeys []int, excludeRecords map[int]struct{}) ([]int, error) {
 
-	if emptyInput {
-		result, err := scanner.FindRecordsIntersection(f.GetFieldName(), f.GetValue(), excludeRecords)
-		if err != nil {
-			return err
-		}
-
-		// Copy result to inputIdKeys
-		for k := range inputIdKeys {
-			delete(inputIdKeys, k)
-		}
-		for k, v := range result {
-			inputIdKeys[k] = v
-		}
-		return nil
-	}
-
-	flagMap, err := scanner.FindValueIntersection(f.GetFieldName(), f.GetValue(), inputIdKeys)
-
-	if err != nil {
-		return err
-	}
-
-	// Remove non-matching records (sweep phase)
-	for recId := range inputIdKeys {
-		if _, ok := flagMap[recId]; !ok {
-			delete(inputIdKeys, recId)
-		}
-	}
-	return nil
+	res, err := scanner.FindValueIntersection(f.GetFieldName(), f.GetValue(), inputIdKeys, excludeRecords)
+	return res, err
 }

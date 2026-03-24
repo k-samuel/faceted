@@ -9,6 +9,16 @@ type AggregationQuery struct {
 	selfFiltering bool
 }
 
+type AggregationResultField struct {
+	Field  string                    `json:"field"`
+	Values []*AggregationResultValue `json:"values"`
+}
+
+type AggregationResultValue struct {
+	Value string `json:"value"`
+	Count *int   `json:"count,omitempty"`
+}
+
 // NewAggregationQuery creates a new AggregationQuery.
 func NewAggregationQuery() *AggregationQuery {
 	return &AggregationQuery{

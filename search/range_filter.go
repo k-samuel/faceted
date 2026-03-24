@@ -61,16 +61,12 @@ func (f *RangeFilter) GetMax() interface{} {
 }
 
 // FilterInput filters the faceted data by range.
-func (f *RangeFilter) FilterInput(scanner ScannerInterface, inputIdKeys map[int]struct{}, excludeRecords map[int]struct{}) error {
+func (f *RangeFilter) FilterInput(scanner ScannerInterface, inputIdKeys []int, excludeRecords map[int]struct{}) ([]int, error) {
 
 	if f.value.Min == f.value.Max {
-		return nil
+		return []int{}, nil
 	}
 
-	err := scanner.FindRangeIntersection(f.GetFieldName(), f.GetValue(), inputIdKeys, excludeRecords)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	list, err := scanner.FindRangeIntersection(f.GetFieldName(), f.GetValue(), inputIdKeys, excludeRecords)
+	return list, err
 }

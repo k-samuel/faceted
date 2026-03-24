@@ -27,7 +27,7 @@ func NewRangeIndexer(step int) (*RangeIndexer, error) {
 }
 
 // Add adds a record to the range index.
-func (ri *RangeIndexer) Add(indexContainer *map[string][]int, recordId int, values []string) (err error) {
+func (ri *RangeIndexer) Add(indexContainer map[string][]int, recordId int, values []string) (err error) {
 	ri.hasUnsorted = true
 
 	var floatValue float64
@@ -42,10 +42,10 @@ func (ri *RangeIndexer) Add(indexContainer *map[string][]int, recordId int, valu
 		position := ri.detectRangeKey(floatValue)
 		positionKey := strconv.Itoa(position)
 
-		if (*indexContainer)[positionKey] == nil {
-			(*indexContainer)[positionKey] = make([]int, 0)
+		if indexContainer[positionKey] == nil {
+			indexContainer[positionKey] = make([]int, 0)
 		}
-		(*indexContainer)[positionKey] = append((*indexContainer)[positionKey], recordId)
+		indexContainer[positionKey] = append(indexContainer[positionKey], recordId)
 
 		if ri.unsortedBuf[positionKey] == nil {
 			ri.unsortedBuf[positionKey] = make(map[string][]int)
@@ -56,7 +56,7 @@ func (ri *RangeIndexer) Add(indexContainer *map[string][]int, recordId int, valu
 }
 
 // Optimize optimizes the range index by sorting values within each range.
-func (ri *RangeIndexer) Optimize(indexContainer *map[string][]int) {
+func (ri *RangeIndexer) Optimize(indexContainer map[string][]int) {
 	if !ri.hasUnsorted {
 		return
 	}
@@ -76,9 +76,10 @@ func (ri *RangeIndexer) Optimize(indexContainer *map[string][]int) {
 		// Rebuild index with sorted values
 		sortedRecords := make([]int, 0)
 		for _, key := range keys {
+			sort.Ints(values[key])
 			sortedRecords = append(sortedRecords, values[key]...)
 		}
-		(*indexContainer)[position] = sortedRecords
+		indexContainer[position] = sortedRecords
 	}
 
 	ri.unsortedBuf = make(map[string]map[string][]int)

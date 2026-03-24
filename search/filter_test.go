@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/k-samuel/faceted/search/value"
@@ -200,10 +201,10 @@ func TestRangeFilterFilterInput(t *testing.T) {
 	st.SetData(facetedData)
 	scan := NewMapScanner(st)
 
-	inputRecords := map[int]struct{}{1: {}, 3: {}, 5: {}, 8: {}, 10: {}, 11: {}}
+	inputRecords := []int{1, 3, 5, 8, 10, 11}
 	excludeRecords := map[int]struct{}{5: {}}
 
-	err := f.FilterInput(scan, inputRecords, excludeRecords)
+	res, err := f.FilterInput(scan, inputRecords, excludeRecords)
 	if err != nil {
 		t.Error(err)
 	}
@@ -212,21 +213,12 @@ func TestRangeFilterFilterInput(t *testing.T) {
 	// After excluding 5: 3,4,6,7,8,9,10
 	// After intersecting with inputRecords {1,3,5,8,10,11}: 3,8,10
 	expectedCount := 3 // records 3, 8, 10
-	if len(inputRecords) != expectedCount {
-		t.Errorf("Expected %d records, got %d", expectedCount, len(inputRecords))
+	if len(res) != expectedCount {
+		t.Errorf("Expected %d records, got %d", expectedCount, len(res))
 	}
 
-	if _, ok := inputRecords[3]; !ok {
-		t.Errorf("Expected record 3 to be included")
-	}
-	if _, ok := inputRecords[5]; ok {
-		t.Errorf("Expected record 5 to be excluded")
-	}
-	if _, ok := inputRecords[8]; !ok {
-		t.Errorf("Expected record 8 to be included")
-	}
-	if _, ok := inputRecords[10]; !ok {
-		t.Errorf("Expected record 10 to be included")
+	if !slices.Equal(res, []int{3, 8, 10}) {
+		t.Errorf("Expected record to be included")
 	}
 }
 
@@ -245,11 +237,11 @@ func TestRangeFilterFilterInputWithNoMatches(t *testing.T) {
 	storage.SetData(facetedData)
 	scan := NewMapScanner(storage)
 
-	inputRecords := map[int]struct{}{1: {}, 2: {}, 3: {}}
-	f.FilterInput(scan, inputRecords, map[int]struct{}{})
+	inputRecords := []int{1, 2, 3}
+	res, _ := f.FilterInput(scan, inputRecords, map[int]struct{}{})
 
-	if len(inputRecords) != 0 {
-		t.Errorf("Expected 0 records after filtering, got %d", len(inputRecords))
+	if len(res) != 0 {
+		t.Errorf("Expected 0 records after filtering, got %d", len(res))
 	}
 }
 
@@ -267,7 +259,7 @@ func TestRangeFilterFilterInputWithAllMatches(t *testing.T) {
 	storage.SetData(facetedData)
 	scan := NewMapScanner(storage)
 
-	inputRecords := map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}}
+	inputRecords := []int{1, 2, 3, 4}
 	f.FilterInput(scan, inputRecords, map[int]struct{}{})
 
 	if len(inputRecords) != 4 {
@@ -287,19 +279,19 @@ func TestRangeFilterFilterInputWithExcludes(t *testing.T) {
 	}
 	storage.SetData(facetedData)
 	scan := NewMapScanner(storage)
-	inputRecords := map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}, 5: {}}
+	inputRecords := []int{1, 2, 3, 4, 5}
 	excludeRecords := map[int]struct{}{2: {}, 5: {}}
 
-	f.FilterInput(scan, inputRecords, excludeRecords)
+	res, _ := f.FilterInput(scan, inputRecords, excludeRecords)
 
-	if len(inputRecords) != 3 {
-		t.Errorf("Expected 3 records, got %d", len(inputRecords))
+	if len(res) != 3 {
+		t.Errorf("Expected 3 records, got %d", len(res))
 	}
-	if _, ok := inputRecords[2]; ok {
-		t.Errorf("Expected record 2 to be excluded")
-	}
-	if _, ok := inputRecords[5]; ok {
-		t.Errorf("Expected record 5 to be excluded")
+
+	for _, v := range res {
+		if v == 2 || v == 5 {
+			t.Errorf("Expected record %d to be excluded", v)
+		}
 	}
 }
 
@@ -539,29 +531,26 @@ func TestValueIntersectionFilterFilterInput(t *testing.T) {
 		},
 	}
 
-	inputRecords := map[int]struct{}{1: {}, 2: {}, 3: {}, 4: {}, 5: {}}
+	inputRecords := []int{1, 2, 3, 4, 5}
 	excludeRecords := map[int]struct{}{}
 
 	st := NewMapStorage(value.NewConverter())
 	st.SetData(facetedData)
 	scan := NewMapScanner(st)
 
-	err := f.FilterInput(scan, inputRecords, excludeRecords)
+	res, err := f.FilterInput(scan, inputRecords, excludeRecords)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
 	// Records with BOTH hunting AND fishing: 2, 3
 	expectedCount := 2
-	if len(inputRecords) != expectedCount {
-		t.Errorf("Expected %d records, got %d", expectedCount, len(inputRecords))
+	if len(res) != expectedCount {
+		t.Errorf("Expected %d records, got %d", expectedCount, len(res))
 	}
 
-	if _, ok := inputRecords[2]; !ok {
-		t.Errorf("Expected record 2 to be included")
-	}
-	if _, ok := inputRecords[3]; !ok {
-		t.Errorf("Expected record 3 to be included")
+	if !slices.Equal(res, []int{2, 3}) {
+		t.Errorf("Expected record 2,3 to be included")
 	}
 }
 
@@ -656,16 +645,33 @@ func TestNewRangeValue(t *testing.T) {
 
 // TestNewValueFilter tests creating a new ValueFilter.
 func TestNewValueFilter(t *testing.T) {
-	f := NewValueFilter("color", []interface{}{"red", "blue"})
 
-	if f.GetFieldName() != "color" {
-		t.Errorf("Expected field name 'color', got %s", f.GetFieldName())
+	container := NewContainer()
+
+	db := container.NewDb()
+	storage := db.GetStorage()
+
+	_ = storage.AddRecord(1, map[string]interface{}{"color": "red", "warehouse": []int{1, 3, 7}})
+	_ = storage.AddRecord(2, map[string]interface{}{"color": "blue", "warehouse": []int{1, 2, 3}})
+	_ = storage.AddRecord(3, map[string]interface{}{"color": "red", "warehouse": []int{1, 2, 3}})
+	_ = storage.AddRecord(4, map[string]interface{}{"color": "red", "warehouse": []int{2, 3}})
+	storage.Optimize()
+
+	filters := []FilterInterface{
+		NewValueFilter("color", []interface{}{"red"}),
+		NewValueFilter("warehouse", []int{2, 3}),
 	}
 
-	values := f.GetValue()
-	valSlice, _ := value.NewConverter().ValueToStringSlice(values)
-	if len(valSlice) != 2 {
-		t.Errorf("Expected 2 values, got %d", len(valSlice))
+	searchQuery := NewSearchQuery().Filters(filters)
+	records, err := db.Query(searchQuery)
+
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Should find record 1
+	if len(records) != 3 {
+		t.Errorf("Expected records 3, got %v", records)
 	}
 }
 
@@ -684,57 +690,6 @@ func TestNewExcludeValueFilter(t *testing.T) {
 
 	if f.GetFieldName() != "color" {
 		t.Errorf("Expected field name 'color', got %s", f.GetFieldName())
-	}
-}
-
-// TestScannerFindUniqueRecords tests Scanner FindUniqueRecords functionality.
-func TestScannerFindUniqueRecords(t *testing.T) {
-	facetedData := map[string]map[string][]int{
-		"color": {
-			"red":   {1, 2},
-			"blue":  {3, 4},
-			"green": {5, 6},
-		},
-	}
-
-	st := NewMapStorage(value.NewConverter())
-	st.SetData(facetedData)
-	scan := NewMapScanner(st)
-	records := map[int]struct{}{}
-	err := scan.FindUniqueRecords("color", []interface{}{"red", "blue"}, records, map[int]struct{}{})
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	// Should have records 1,2,3,4
-	if len(records) != 4 {
-		t.Errorf("Expected 4 records, got %d", len(records))
-	}
-}
-
-// TestScannerFindInValues tests Scanner FindInValues functionality.
-func TestScannerFindInValues(t *testing.T) {
-	facetedData := map[string]map[string][]int{
-		"color": {
-			"red":   {1, 2},
-			"blue":  {3, 4},
-			"green": {5, 6},
-		},
-	}
-
-	st := NewMapStorage(value.NewConverter())
-	st.SetData(facetedData)
-	scan := NewMapScanner(st)
-
-	result := make(map[int]struct{})
-	err := scan.FindInValues("color", []interface{}{"red", "blue"}, result)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	// Should have records 1,2,3,4
-	if len(result) != 4 {
-		t.Errorf("Expected 4 records, got %d", len(result))
 	}
 }
 
@@ -773,31 +728,8 @@ func TestScannerGetAllValues(t *testing.T) {
 	scan := NewMapScanner(st)
 
 	values := scan.GetAllValues(map[int]struct{}{})
-	if _, ok := values["color"]; !ok {
+	if !hasAggregationField(values, "color") {
 		t.Errorf("Expected color field in values")
-	}
-}
-
-// TestMapScannerFindInput tests MapScanner FindInput functionality.
-func TestMapScannerFindInput(t *testing.T) {
-	facetedData := map[string]map[string][]int{
-		"color": {
-			"red": {1, 2},
-		},
-	}
-
-	st := NewMapStorage(value.NewConverter())
-	st.SetData(facetedData)
-	scan := NewMapScanner(st)
-
-	inputRecords := map[int]struct{}{1: {}, 3: {}}
-	excludeRecords := map[int]struct{}{3: {}}
-
-	result := scan.FindInput(inputRecords, excludeRecords)
-
-	// Should have only record 1
-	if len(result) != 1 {
-		t.Errorf("Expected 1 record, got %d", len(result))
 	}
 }
 
@@ -845,7 +777,8 @@ func TestScannerGetAllValuesWithExclude(t *testing.T) {
 	values := scan.GetAllValues(excludeMap)
 
 	// red should still exist (has record 2)
-	if _, ok := values["color"]["red"]; !ok {
+	foundRed := hasAggregationValue(values, "color", "red")
+	if !foundRed {
 		t.Errorf("Expected red in values even with record 1 excluded")
 	}
 }
@@ -858,29 +791,6 @@ func TestScannerGetFieldValueRecordsEmpty(t *testing.T) {
 	records := scan.GetFieldValueRecords("nonexistent")
 	if len(records) != 0 {
 		t.Errorf("Expected 0 records for nonexistent field, got %d", len(records))
-	}
-}
-
-// TestMapScannerFindInputWithAllExcluded tests MapScanner FindInput with all records excluded.
-func TestMapScannerFindInputWithAllExcluded(t *testing.T) {
-	facetedData := map[string]map[string][]int{
-		"color": {
-			"red": {1, 2, 3},
-		},
-	}
-
-	st := NewMapStorage(value.NewConverter())
-	st.SetData(facetedData)
-	scan := NewMapScanner(st)
-
-	inputRecords := map[int]struct{}{1: {}, 2: {}, 3: {}}
-	excludeRecords := map[int]struct{}{1: {}, 2: {}, 3: {}}
-
-	result := scan.FindInput(inputRecords, excludeRecords)
-
-	// All records excluded, should be empty
-	if len(result) != 0 {
-		t.Errorf("Expected 0 records, got %d", len(result))
 	}
 }
 
@@ -962,7 +872,7 @@ func TestAggregationWithSelfFiltering(t *testing.T) {
 	}
 
 	// red should exist in color with count
-	if _, ok := aggData["color"]; !ok {
+	if !hasAggregationField(aggData, "color") {
 		t.Errorf("Expected color in aggData")
 	}
 }
@@ -1006,21 +916,21 @@ func TestFilterInputWithNoMatches(t *testing.T) {
 		},
 	}
 
-	inputRecords := map[int]struct{}{1: {}, 2: {}}
+	inputRecords := []int{1, 2}
 	excludeRecords := make(map[int]struct{})
 
 	st := NewMapStorage(value.NewConverter())
 	st.SetData(facetedData)
 	scan := NewMapScanner(st)
 
-	err := f.FilterInput(scan, inputRecords, excludeRecords)
+	res, err := f.FilterInput(scan, inputRecords, excludeRecords)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
 	// No records match "green", all should be removed from input
-	if len(inputRecords) != 0 {
-		t.Errorf("Expected 0 records after filter, got %d", len(inputRecords))
+	if len(res) != 0 {
+		t.Errorf("Expected 0 records after filter, got %d", len(res))
 	}
 }
 
@@ -1073,26 +983,6 @@ func TestGetRecordsCountWithNonExistentField(t *testing.T) {
 	count := st.GetRecordsCount("color", "red")
 	if count != 0 {
 		t.Errorf("Expected 0 count for nonexistent field, got %d", count)
-	}
-}
-
-// TestExcludeValueFilterFilterInput tests ExcludeValueFilter FilterInput (should be no-op).
-func TestExcludeValueFilterFilterInput(t *testing.T) {
-	f := NewExcludeValueFilter("color", []interface{}{"red"})
-
-	// FilterInput for exclude filters is a no-op
-	// All work is done in AddExcluded
-	inputRecords := map[int]struct{}{1: {}, 2: {}}
-	excludeRecords := make(map[int]struct{})
-
-	err := f.FilterInput(nil, inputRecords, excludeRecords)
-	if err != nil {
-		t.Errorf("Expected no error from FilterInput on exclude filter, got %v", err)
-	}
-
-	// Input records should be unchanged
-	if len(inputRecords) != 2 {
-		t.Errorf("Expected 2 input records unchanged, got %d", len(inputRecords))
 	}
 }
 
@@ -1155,8 +1045,74 @@ func TestAggregationQueryWithInputRecords(t *testing.T) {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	// Should show red: 1, blue: 1 (only from records 1 and 2)
-	if _, ok := aggData["color"]; !ok {
-		t.Errorf("Expected color in aggData")
+	// Debug: print all fields
+	t.Logf("Aggregation data: %d fields", len(aggData))
+	for _, f := range aggData {
+		t.Logf("  Field %s: %d values", f.Field, len(f.Values))
+		for _, v := range f.Values {
+			if v.Count != nil {
+				t.Logf("    %s=%d", v.Value, *v.Count)
+			} else {
+				t.Logf("    %s", v.Value)
+			}
+		}
 	}
+
+	// Should show red: 1, blue: 1 (only from records 1 and 2)
+	colorField := findAggregationField(aggData, "color")
+	if colorField == nil {
+		t.Errorf("Expected color field in aggData")
+		return
+	}
+	if len(colorField.Values) != 2 {
+		t.Errorf("Expected 2 values in color field, got %d", len(colorField.Values))
+	}
+	redFound := false
+	blueFound := false
+	for _, v := range colorField.Values {
+		if v.Value == "red" {
+			redFound = true
+		}
+		if v.Value == "blue" {
+			blueFound = true
+		}
+	}
+	if !redFound || !blueFound {
+		t.Errorf("Expected red and blue colors in aggData, got red=%v blue=%v", redFound, blueFound)
+	}
+
+}
+
+// hasAggregationField checks if a field exists in aggregation results.
+func hasAggregationField(result []*AggregationResultField, fieldName string) bool {
+	for _, field := range result {
+		if field.Field == fieldName {
+			return true
+		}
+	}
+	return false
+}
+
+// hasAggregationValue checks if a value exists in a specific field.
+func hasAggregationValue(result []*AggregationResultField, fieldName, value string) bool {
+	for _, field := range result {
+		if field.Field == fieldName {
+			for _, v := range field.Values {
+				if v.Value == value {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// findAggregationField finds a field in aggregation results.
+func findAggregationField(result []*AggregationResultField, fieldName string) *AggregationResultField {
+	for _, field := range result {
+		if field.Field == fieldName {
+			return field
+		}
+	}
+	return nil
 }

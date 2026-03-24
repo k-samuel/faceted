@@ -58,14 +58,27 @@ func (f *ExcludeRangeFilter) AddExcluded(scanner ScannerInterface, excludeRecord
 		return nil
 	}
 
+	var input []int
+
 	if excludeRecords == nil {
 		excludeRecords = make(map[int]struct{})
+		input = make([]int, 0, 0)
+	} else {
+		input = make([]int, 0, len(excludeRecords))
+		for k := range excludeRecords {
+			input = append(input, k)
+		}
 	}
 
-	err := scanner.FindInRange(f.GetFieldName(), f.GetValue(), excludeRecords)
+	list, err := scanner.FindInRange(f.GetFieldName(), f.GetValue())
 
 	if err != nil {
 		return err
 	}
+
+	for _, v := range list {
+		excludeRecords[v] = struct{}{}
+	}
+
 	return nil
 }

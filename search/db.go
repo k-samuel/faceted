@@ -42,15 +42,13 @@ func (i *Db) Query(q *SearchQuery) ([]int, error) {
 
 	order := q.GetSort()
 
-	// Convert input records to map
-	var inputMap map[int]struct{}
 	if len(inputRecords) > 0 {
-		inputMap = mapInputArray(inputRecords)
+		sort.Slice(inputRecords, func(i, j int) bool { return inputRecords[i] < inputRecords[j] })
 	}
 
 	var err error
 	// Optimize filter order - process filters with fewer matches first
-	if len(inputMap) == 0 && len(filters) > 1 {
+	if len(inputRecords) == 0 && len(filters) > 1 {
 		filters, err = sortFilters(i.storage, filters)
 		if err != nil {
 			return nil, err
@@ -64,28 +62,24 @@ func (i *Db) Query(q *SearchQuery) ([]int, error) {
 	}
 
 	// Find records
-	mapResult, err := i.scanner.FindRecordsMap(filters, inputMap, excludeMap)
+	res, err := i.scanner.FindRecords(filters, inputRecords, excludeMap)
 	if err != nil {
 		return nil, err
 	}
 
 	// Sort if needed
-	if order != nil {
+
+	if order != nil && len(res) > 1 {
 		velueMap := i.scanner.GetFieldValueRecords(order.GetField())
-		result := sortQuery(velueMap, mapResult, order)
+		result := sortQuery(velueMap, res, order)
 		return result, nil
 	}
 
-	// Convert map to slice with pre-allocated capacity
-	result := make([]int, 0, len(mapResult))
-	for k := range mapResult {
-		result = append(result, k)
-	}
-	return result, nil
+	return res, nil
 }
 
 // Aggregate finds acceptable filter values.
-func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, error) {
+func (i *Db) Aggregate(q *AggregationQuery) ([]*AggregationResultField, error) {
 	input := q.GetInRecords()
 	filterList := q.GetFilters()
 
@@ -109,9 +103,11 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 		i.scanner.FindExcludeRecordsMap(exceptFilters, excludeMap)
 	}
 
+	var result []*AggregationResultField
+
 	// Return all values if no filters and no input
 	if len(filters) == 0 && len(input) == 0 {
-		var result map[string]map[string]interface{}
+
 		if countValues {
 			result = i.scanner.GetAllValuesCount(excludeMap)
 		} else {
@@ -124,15 +120,11 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 		return result, nil
 	}
 
-	// Convert input records to map
-	var inputMap map[int]struct{}
 	if len(input) > 0 {
-		inputMap = mapInputArray(input)
+		sort.Slice(input, func(i, j int) bool { return input[i] < input[j] })
 	}
 
-	filteredRecords := make(map[int]struct{})
-	resultCache := NewResultCache(len(filters))
-	//make(map[string]map[int]struct{})
+	filteredRecords := make([]int, 0, 0)
 
 	var err error
 
@@ -145,20 +137,13 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 			}
 		}
 
-		// Index filters by field and cache results
-		for _, f := range filters {
-			name := f.GetFieldName()
-			res, err := i.scanner.FindRecordsMap([]FilterInterface{f}, inputMap, excludeMap)
-			if err != nil {
-				return nil, err
-			}
-			resultCache.Add(&FilterResultCache{Name: name, Values: res})
-		}
-		resultCache.SortByCount()
 		// Merge results
-		filteredRecords = mergeFilters(resultCache, "")
-	} else if len(inputMap) > 0 {
-		res, err := i.scanner.FindRecordsMap([]FilterInterface{}, inputMap, excludeMap)
+		filteredRecords, err = i.scanner.FindRecords(filters, input, excludeMap)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(input) > 0 {
+		res, err := i.scanner.FindRecords([]FilterInterface{}, input, excludeMap)
 		if err != nil {
 			return nil, err
 		}
@@ -166,11 +151,10 @@ func (i *Db) Aggregate(q *AggregationQuery) (map[string]map[string]interface{}, 
 	}
 
 	// Intersect index values and filtered records
-	result, err := i.scanner.AggregationScan(
-		resultCache,
+	result, err = i.scanner.AggregationScan(
 		filteredRecords,
 		countValues,
-		inputMap,
+		input,
 		excludeMap,
 		q.HasSelfFiltering(),
 		filters,
@@ -204,48 +188,6 @@ func mapInputArray(inputRecords []int) map[int]struct{} {
 	return input
 }
 
-// mergeFilters merges filter results.
-func mergeFilters(cache *ResultCache, skipKey string) map[int]struct{} {
-
-	isFirst := true
-
-	var result map[int]struct{}
-
-	// Intersect with other maps
-	for _, mapData := range cache.Data {
-
-		if skipKey != "" && mapData.Name == skipKey {
-			continue
-		}
-
-		if isFirst {
-			if len(mapData.Values) == 0 {
-				return make(map[int]struct{})
-			}
-			// Start with the smallest map
-			result = make(map[int]struct{}, len(mapData.Values))
-			for k, _ := range mapData.Values {
-				result[k] = struct{}{}
-			}
-			isFirst = false
-			continue
-		}
-
-		for k, _ := range result {
-			if _, ok := mapData.Values[k]; !ok {
-				delete(result, k)
-			}
-		}
-
-		// Early exit if result is empty
-		if len(result) == 0 {
-			return result
-		}
-	}
-
-	return result
-}
-
 func sortFilters(storage StorageInterface, filters []FilterInterface) ([]FilterInterface, error) {
 
 	type filterWithIndex struct {
@@ -256,7 +198,7 @@ func sortFilters(storage StorageInterface, filters []FilterInterface) ([]FilterI
 	counts := make([]filterWithIndex, len(filters))
 
 	for i, flt := range filters {
-		// Non-ValueFilter types get max priority
+		// Non-ValueFilter types get lowest priority
 		vf, ok := flt.(*ValueFilter)
 		if !ok {
 			counts[i] = filterWithIndex{index: i, count: math.MaxInt}
@@ -320,39 +262,28 @@ func sortFilters(storage StorageInterface, filters []FilterInterface) ([]FilterI
 
 // Sort sorts aggregation result fields and values.
 // result: map[fieldName]map[fieldValue]count|true
-func sortAggregarion(sortConfig *AggregationSort, result map[string]map[string]interface{}) {
+func sortAggregarion(sortConfig *AggregationSort, result []*AggregationResultField) {
 
-	// Sort outer map keys (field names)
-	fieldNames := make([]string, 0, len(result))
-	for fieldName := range result {
-		fieldNames = append(fieldNames, fieldName)
+	for _, v := range result {
+		if sortConfig.ValueDirection == SortAsc {
+			slices.SortFunc(v.Values, func(a, b *AggregationResultValue) int {
+				return strings.Compare(a.Value, b.Value)
+			})
+		} else {
+			slices.SortFunc(v.Values, func(a, b *AggregationResultValue) int {
+				return strings.Compare(b.Value, a.Value)
+			})
+		}
 	}
 
 	if sortConfig.FieldDirection == SortAsc {
-		slices.SortStableFunc(fieldNames, func(i, j string) int {
-			return strings.Compare(i, j)
+		slices.SortFunc(result, func(a, b *AggregationResultField) int {
+			return strings.Compare(a.Field, b.Field)
 		})
 	} else {
-		slices.SortStableFunc(fieldNames, func(i, j string) int {
-			return strings.Compare(j, i)
+		slices.SortFunc(result, func(a, b *AggregationResultField) int {
+			return strings.Compare(b.Field, a.Field)
 		})
-
-	}
-
-	// Rebuild result in sorted order
-	sortedResult := make(map[string]map[string]interface{})
-	for _, fieldName := range fieldNames {
-		values := result[fieldName]
-		sortedValues := sortValues(values, false)
-		sortedResult[fieldName] = sortedValues
-	}
-
-	// Copy back to result
-	for k := range result {
-		delete(result, k)
-	}
-	for k, v := range sortedResult {
-		result[k] = v
 	}
 }
 
@@ -381,7 +312,8 @@ func sortValues(values map[string]interface{}, reverse bool) map[string]interfac
 }
 
 // Sort sorts results by field value.
-func sortQuery(values map[string][]int, resultsMap map[int]struct{}, order *Sort) []int {
+
+func sortQuery(values map[string][]int, results []int, order *Sort) []int {
 
 	// Determine sort type and create typed slice for efficient sorting
 
@@ -404,23 +336,28 @@ func sortQuery(values map[string][]int, resultsMap map[int]struct{}, order *Sort
 
 	// Build sorted result
 	sorted := make([]int, 0)
+	processed := make(map[int]struct{}, len(results))
+	for _, k := range results {
+		processed[k] = struct{}{}
+	}
 
 	for _, value := range sortedValues {
 		records := values[value]
 		if order.GetDirection() == SortAsc {
 			for _, recId := range records {
-				if _, ok := resultsMap[recId]; ok {
+
+				if _, ok := processed[recId]; ok {
 					sorted = append(sorted, recId)
-					delete(resultsMap, recId)
+					delete(processed, recId)
 				}
 			}
 		} else {
 			// Reverse order for descending
 			for i := len(records) - 1; i >= 0; i-- {
 				recId := records[i]
-				if _, ok := resultsMap[recId]; ok {
+				if _, ok := processed[recId]; ok {
 					sorted = append(sorted, recId)
-					delete(resultsMap, recId)
+					delete(processed, recId)
 				}
 			}
 		}

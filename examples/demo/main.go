@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -146,16 +145,17 @@ func main() {
 			}
 		}
 
+		dataCopy := make([]*search.AggregationResultField, 0, len(data))
 		// Exclude fields that should not be used to filter data.
-		for f := range data {
+		for _, f := range data {
 			// check if field exists in db
-			if _, ok := filterTitles[f]; !ok {
-				delete(data, f)
+			if _, ok := filterTitles[f.Field]; ok {
+				dataCopy = append(dataCopy, f)
 			}
 		}
 
 		result := map[string]interface{}{
-			"filters": map[string]interface{}{"data": data, "price_step": 200},
+			"filters": map[string]interface{}{"data": dataCopy, "price_step": 200},
 			"results": map[string]interface{}{"data": resultItems, "count": len(productData), "limit": pageLimit},
 			"titles":  filterTitles,
 		}
@@ -273,21 +273,23 @@ func extractQueryParams(r *http.Request, defaultSortValue string) (filters []sea
 		}
 	}
 
-	priceFrom := 0
-	priceTo := math.MaxInt64
+	var priceFrom *int
+	var priceTo *int
 
 	pFromStr := r.FormValue("price_from")
 	if pFromStr != "" {
-		priceFrom, _ = strconv.Atoi(pFromStr)
+		pf, _ := strconv.Atoi(pFromStr)
+		priceFrom = &pf
 	}
 
 	pToStr := r.FormValue("price_to")
 	if pToStr != "" {
-		priceTo, _ = strconv.Atoi(pToStr)
+		pt, _ := strconv.Atoi(pToStr)
+		priceTo = &pt
 	}
 
 	// Price range filter
-	if priceFrom > 0 || priceTo > 0 {
+	if priceFrom != nil || priceTo != nil {
 		filters = append(filters, search.NewRangeFilter("price", search.NewRangeValue(priceFrom, priceTo)))
 	}
 

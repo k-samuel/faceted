@@ -9,19 +9,25 @@ import (
 
 // ArrayStorage implements StorageInterface using Go maps.
 type MapStorage struct {
-	data        map[string]map[string][]int
-	indexers    map[string]indexer.IndexerInterface
-	converter   value.ConverterInterface
-	recordCount int
+	data         map[string]map[string][]int
+	indexers     map[string]indexer.IndexerInterface
+	converter    value.ConverterInterface
+	recordCount  int
+	needOptimize bool
 }
 
 // NewStorage creates a new ArrayStorage.
 func NewMapStorage(converter value.ConverterInterface) *MapStorage {
 	return &MapStorage{
-		data:      make(map[string]map[string][]int),
-		indexers:  make(map[string]indexer.IndexerInterface),
-		converter: converter,
+		data:         make(map[string]map[string][]int),
+		indexers:     make(map[string]indexer.IndexerInterface),
+		converter:    converter,
+		needOptimize: false,
 	}
+}
+
+func (s *MapStorage) GetTotalCount() int {
+	return s.recordCount
 }
 
 func (s *MapStorage) GetValueConverter() value.ConverterInterface {
@@ -48,7 +54,7 @@ func (s *MapStorage) AddRecord(recordId int, recordValues map[string]interface{}
 			}
 			fieldData := s.data[fieldName]
 
-			err = indexer.Add(&fieldData, recordId, valueSlice)
+			err = indexer.Add(fieldData, recordId, valueSlice)
 
 			if err != nil {
 				return err
@@ -65,11 +71,15 @@ func (s *MapStorage) AddRecord(recordId int, recordValues map[string]interface{}
 		}
 	}
 	s.recordCount++
+	s.needOptimize = true
 	return nil
 }
 
 // GetData returns all facet data.
 func (s *MapStorage) GetData() map[string]map[string][]int {
+	if s.needOptimize {
+		s.Optimize()
+	}
 	return s.data
 }
 
@@ -77,7 +87,7 @@ func (s *MapStorage) GetData() map[string]map[string][]int {
 func (s *MapStorage) Export() map[string]map[string][]int {
 	for fieldName, idx := range s.indexers {
 		fieldData := s.data[fieldName]
-		idx.Optimize(&fieldData)
+		idx.Optimize(fieldData)
 		s.data[fieldName] = fieldData
 	}
 	return s.data
@@ -92,6 +102,11 @@ func (s *MapStorage) SetData(data map[string]map[string][]int) {
 
 // GetFieldData returns field data section from index.
 func (s *MapStorage) GetFieldData(fieldName string) map[string][]int {
+
+	if s.needOptimize {
+		s.Optimize()
+	}
+
 	if data, ok := s.data[fieldName]; ok {
 		return data
 	}
@@ -127,43 +142,21 @@ func (s *MapStorage) Optimize() {
 	// Optimize indexers
 	for fieldName, idx := range s.indexers {
 		fieldData := s.data[fieldName]
-		idx.Optimize(&fieldData)
+		idx.Optimize(fieldData)
 		s.data[fieldName] = fieldData
 	}
 
 	// Sort records by ID and values by record count
 	for fieldName, valueList := range s.data {
 		// Count records per value
-		//valueCounts := make(map[string]int)
-		for /*value*/ _, list := range valueList {
-			//valueCounts[value] = len(list)
-
+		for _, list := range valueList {
 			// Sort records by ID (except for range indexers)
 			if _, hasIndexer := s.indexers[fieldName]; !hasIndexer {
 				sort.Ints(list)
 			}
 		}
-
-		/*
-			// Sort values by record count
-			sortedValues := make([]string, len(valueCounts))
-			i := 0
-			for value := range valueCounts {
-				sortedValues[i] = value
-				i++
-			}
-			sort.Slice(sortedValues, func(i, j int) bool {
-				return valueCounts[sortedValues[i]] < valueCounts[sortedValues[j]]
-			})
-
-			// Rebuild valueList in sorted order
-			newList := make(map[string][]int)
-			for _, value := range sortedValues {
-				newList[value] = valueList[value]
-			}
-			s.data[fieldName] = newList
-		*/
 	}
+	s.needOptimize = false
 }
 
 // DeleteRecord deletes a record from the index.

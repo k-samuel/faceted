@@ -34,17 +34,17 @@ func TestRangeIndexerAdd(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Test adding records with various values
-	err := ri.Add(&indexContainer, 1, []string{"50"})
+	err := ri.Add(indexContainer, 1, []string{"50"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 2, []string{"150"})
+	err = ri.Add(indexContainer, 2, []string{"150"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 3, []string{"250"})
+	err = ri.Add(indexContainer, 3, []string{"250"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -70,7 +70,7 @@ func TestRangeIndexerAddMultipleValues(t *testing.T) {
 	ri, _ := NewRangeIndexer(100)
 	indexContainer := make(map[string][]int)
 
-	err := ri.Add(&indexContainer, 1, []string{"50", "150", "250"})
+	err := ri.Add(indexContainer, 1, []string{"50", "150", "250"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -86,7 +86,7 @@ func TestRangeIndexerAddInvalidValue(t *testing.T) {
 	ri, _ := NewRangeIndexer(100)
 	indexContainer := make(map[string][]int)
 
-	err := ri.Add(&indexContainer, 1, []string{"invalid"})
+	err := ri.Add(indexContainer, 1, []string{"invalid"})
 	if err == nil {
 		t.Errorf("Expected error for invalid value")
 	}
@@ -104,7 +104,7 @@ func TestRangeIndexerOptimize(t *testing.T) {
 	ri.unsortedBuf["0"]["30"] = []int{3}
 	ri.unsortedBuf["0"]["70"] = []int{4, 5}
 
-	ri.Optimize(&indexContainer)
+	ri.Optimize(indexContainer)
 
 	// After optimization, unsortedBuf should be cleared
 	if len(ri.unsortedBuf) != 0 {
@@ -124,7 +124,7 @@ func TestRangeIndexerOptimizeNoUnsorted(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Should not panic
-	ri.Optimize(&indexContainer)
+	ri.Optimize(indexContainer)
 }
 
 // TestDetectRangeKey tests detecting range keys.
@@ -175,13 +175,13 @@ func TestRangeIndexerEdgeCases(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Test with zero value
-	err := ri.Add(&indexContainer, 1, []string{"0"})
+	err := ri.Add(indexContainer, 1, []string{"0"})
 	if err != nil {
 		t.Errorf("Expected no error for zero value, got %v", err)
 	}
 
 	// Test with large value
-	err = ri.Add(&indexContainer, 2, []string{"999999"})
+	err = ri.Add(indexContainer, 2, []string{"999999"})
 	if err != nil {
 		t.Errorf("Expected no error for large value, got %v", err)
 	}
@@ -198,8 +198,8 @@ func TestRangeIndexerDuplicateRecords(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Add same record multiple times
-	ri.Add(&indexContainer, 1, []string{"50"})
-	ri.Add(&indexContainer, 1, []string{"150"})
+	ri.Add(indexContainer, 1, []string{"50"})
+	ri.Add(indexContainer, 1, []string{"150"})
 
 	// Should have 2 ranges
 	if len(indexContainer) != 2 {
@@ -227,7 +227,7 @@ func TestRangeIndexerUnsortedFlag(t *testing.T) {
 	}
 
 	// After adding, it should be true
-	ri.Add(&indexContainer, 1, []string{"50"})
+	ri.Add(indexContainer, 1, []string{"50"})
 	if !ri.hasUnsorted {
 		t.Errorf("Expected hasUnsorted to be true after adding")
 	}
