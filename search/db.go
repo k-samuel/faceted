@@ -124,8 +124,6 @@ func (i *Db) Aggregate(q *AggregationQuery) ([]*AggregationResultField, error) {
 		sort.Slice(input, func(i, j int) bool { return input[i] < input[j] })
 	}
 
-	filteredRecords := make([]int, 0, 0)
-
 	var err error
 
 	if len(filters) > 0 {
@@ -136,23 +134,10 @@ func (i *Db) Aggregate(q *AggregationQuery) ([]*AggregationResultField, error) {
 				return nil, err
 			}
 		}
-
-		// Merge results
-		filteredRecords, err = i.scanner.FindRecords(filters, input, excludeMap)
-		if err != nil {
-			return nil, err
-		}
-	} else if len(input) > 0 {
-		res, err := i.scanner.FindRecords([]FilterInterface{}, input, excludeMap)
-		if err != nil {
-			return nil, err
-		}
-		filteredRecords = res
 	}
 
 	// Intersect index values and filtered records
 	result, err = i.scanner.AggregationScan(
-		filteredRecords,
 		countValues,
 		input,
 		excludeMap,
@@ -177,15 +162,6 @@ func (i *Db) GetStorage() StorageInterface {
 // GetStorage returns index storage.
 func (i *Db) GetScanner() ScannerInterface {
 	return i.scanner
-}
-
-// mapInputArray converts input array to map.
-func mapInputArray(inputRecords []int) map[int]struct{} {
-	input := make(map[int]struct{})
-	for _, v := range inputRecords {
-		input[v] = struct{}{}
-	}
-	return input
 }
 
 func sortFilters(storage StorageInterface, filters []FilterInterface) ([]FilterInterface, error) {

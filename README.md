@@ -38,11 +38,11 @@ Bench Golang (1.25) vs PHP (8.4.4 Opcache JIT, noxdebug) 1M records
 | Total Memory, Mb        |☑  135 Mb   |   424 Mb   |
 | Find                    |☑  0.012627 |   0.022952 |
 | Find & Sort             |☑  0.025829 |   0.030542 |
-| Find (unsets)           |  0.048691   | ☑ 0.030736|
-| Find (ranges)           |  0.123341   | ☑ 0.032662|
-| Filters                 |  0.240740   | ☑ 0.070283|
-| Filters & count         |  0.482712   | ☑ 0.137206|
-| Filters & count & exc   |  0.655874   | ☑ 0.154704|
+| Find (unsets)           |  0.048186   | ☑ 0.030736|
+| Find (ranges)           |☑  0.028761 |    0.032662|
+| Filters                 |  0.087418   | ☑ 0.070283|
+| Filters & count         |  0.307845   | ☑ 0.137206|
+| Filters & count & exc   |  0.321084   | ☑ 0.154704|
 
 
 

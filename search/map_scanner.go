@@ -50,29 +50,36 @@ func (sc *MapScanner) FindRecords(filters []FilterInterface, inputRecords []int,
 		}
 	}
 
+	result := make([]int, 0, len(inputRecords))
+	if len(inputRecords) > 0 {
+		result = append(result, inputRecords...)
+	}
 	// Process each filter
 	for _, f := range filters {
+
+		// Break if storage has no filtered field
 		if !sc.storage.HasField(f.GetFieldName()) {
 			return make([]int, 0, 0), nil
 		}
 
-		// Apply filter
-		inputRecords, err = f.FilterInput(sc, inputRecords, excludeRecords)
+		// Apply filter recursively
+		result, err = f.FilterInput(sc, result, excludeRecords)
 		if err != nil {
 			return nil, err
 		}
 
 		// Early exit if no matches
-		if len(inputRecords) == 0 {
-			return inputRecords, nil
+		if len(result) == 0 {
+			return result, nil
 		}
 	}
 
-	return inputRecords, nil
+	return result, nil
 }
 
 // FindExcludeRecordsMap finds records by exclude filters.
 func (sc *MapScanner) FindExcludeRecordsMap(filters []ExcludeFilterInterface, excludeRecords map[int]struct{}) {
+
 	if len(filters) == 0 {
 		return
 	}
@@ -125,7 +132,6 @@ func (sc *MapScanner) GetAllRecordId(inputRecords []int, excludeRecords map[int]
 
 // aggregationScan performs the aggregation scan.
 func (sc *MapScanner) AggregationScan(
-	filteredRecords []int,
 	countRecords bool,
 	input []int,
 	exclude map[int]struct{},
@@ -141,6 +147,26 @@ func (sc *MapScanner) AggregationScan(
 		indexedFilters[f.GetFieldName()] = f
 	}
 
+	data := sc.storage.GetData()
+	needSelfFiltering := selfFiltering
+	if !needSelfFiltering {
+		for filterName := range data {
+			if f, ok := indexedFilters[filterName]; ok && f.HasSelfFiltering() {
+				needSelfFiltering = true
+				break
+			}
+		}
+	}
+
+	var filteredData []int
+	var err error
+
+	// Optimization for fields without filters
+	filteredData, err = sc.FindRecords(filters, input, exclude)
+	if err != nil {
+		return nil, err
+	}
+
 	// Scan storage
 	for filterName, filterValues := range sc.storage.GetData() {
 
@@ -148,7 +174,7 @@ func (sc *MapScanner) AggregationScan(
 		fieldResult := make([]*AggregationResultValue, 0, len(filterValues))
 
 		// Check if self-filtering is needed
-		needSelfFiltering := selfFiltering
+		needSelfFiltering = selfFiltering
 		if f, ok := indexedFilters[filterName]; ok && f.HasSelfFiltering() {
 			needSelfFiltering = true
 		}
@@ -167,23 +193,23 @@ func (sc *MapScanner) AggregationScan(
 		}
 
 		var recordIds []int
-		var err error
-
 		// Single filter - no need to merge
 		if needSelfFiltering {
-			recordIds, err = sc.FindRecords(filters, input, exclude)
+			recordIds = filteredData
 		} else {
-			// copy hash map
-			filtersCopy := copyFilterMap(indexedFilters)
-			delete(filtersCopy, filterName)
-			recordIds, err = sc.FindRecords(extractFilters(filtersCopy), input, exclude)
+			if _, ok := indexedFilters[filterName]; !ok {
+				// no filters for field, use filteredData
+				recordIds = filteredData
+			} else {
+				// copy hash map
+				filtersCopy := copyFilterMap(indexedFilters)
+				delete(filtersCopy, filterName)
+				recordIds, err = sc.FindRecords(extractFilters(filtersCopy), input, exclude)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
-		if err != nil {
-			return nil, err
-		}
-
-		// Debug output
-		//t.Logf("Field %s: filterName=%s, needSelfFiltering=%v, input=%v, recordIds=%v", filterName, filterName, needSelfFiltering, input, recordIds)
 
 		if countRecords {
 			for filterValue, data := range filterValues {
@@ -354,37 +380,30 @@ func (sc *MapScanner) IntersectFilterValues(field string, values interface{}, in
 	return result, nil
 }
 
-func (sc *MapScanner) MergeExcludedValues(field string, values interface{}) (result []int, err error) {
+func (sc *MapScanner) AddExcludedValues(field string, values interface{}, excludeRecords map[int]struct{}) (err error) {
 
-	result = make([]int, 0, 0)
 	if !sc.storage.HasField(field) {
-		return nil, err
+		return err
 	}
 
 	val, err := sc.storage.converter.ValueToStringSlice(values)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	data := sc.storage.GetFieldData(field)
 
 	for _, item := range val {
-
 		records, ok := data[item]
 		if !ok {
 			continue
 		}
 
-		if len(result) > 0 {
-			result = MergeSortedSlices(result, records)
-			if len(result) > 1 {
-				result = Deduplicate(result)
-			}
-		} else {
-			result = append(result, records...)
+		for _, recId := range records {
+			excludeRecords[recId] = struct{}{}
 		}
 	}
-	return result, nil
+	return nil
 }
 
 func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, limitRecords []int, excludeRecords map[int]struct{}) (result []int, err error) {
@@ -418,7 +437,18 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 	data := sc.GetFieldValueRecords(field)
 	sortedValues := sc.GetSortedFieldValues(field)
 
+	var limitMap map[int]struct{}
 	var list map[int]struct{}
+
+	hasExclude := len(excludeRecords) > 0
+	hasLimit := len(limitRecords) > 0
+
+	if hasLimit {
+		limitMap = make(map[int]struct{}, len(limitRecords))
+		for _, v := range limitRecords {
+			limitMap[v] = struct{}{}
+		}
+	}
 
 	for _, value := range sortedValues {
 
@@ -435,26 +465,23 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 			list = make(map[int]struct{}, len(records))
 		}
 
-		if len(list) == 0 && len(excludeRecords) == 0 {
-			if len(limitRecords) > 0 {
-				MapAddValues(list, IntersectSortedInt(limitRecords, records))
-			} else {
-				MapAddValues(list, records)
-			}
-		} else {
-			tmp := make([]int, 0, len(records))
-			for _, recId := range records {
-				if _, ok := excludeRecords[recId]; !ok {
-					tmp = append(tmp, recId)
-				}
-			}
-			if len(tmp) > 0 {
+		for _, recId := range records {
 
-				if len(limitRecords) > 0 {
-					tmp = IntersectSortedInt(tmp, limitRecords)
-				}
-				MapAddValues(list, tmp)
+			if _, ok := list[recId]; ok {
+				continue
 			}
+
+			if hasExclude {
+				if _, ok := excludeRecords[recId]; ok {
+					continue
+				}
+			}
+			if hasLimit {
+				if _, ok := limitMap[recId]; !ok {
+					continue
+				}
+			}
+			list[recId] = struct{}{}
 		}
 	}
 
@@ -462,6 +489,8 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 	for k := range list {
 		res = append(res, k)
 	}
+	slices.Sort(res)
+
 	return res, nil
 }
 

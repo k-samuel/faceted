@@ -89,12 +89,12 @@ func TestQueryWithRange(t *testing.T) {
 	storage.AddIndexer("price", indexer)
 
 	records := map[int]map[string]interface{}{
-		1: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 1000, "color": "black", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 10}},
-		2: {"vendor": "Samsung", "model": "Galaxy S20", "price": 1000, "color": "white", "has_phones": 1, "cam_mp": 105, "sale": 0, "warehouse": []int{1, 7, 12}},
+		1: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 1000, "color": "black", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 10, 11}},
+		2: {"vendor": "Samsung", "model": "Galaxy S20", "price": 1000, "color": "white", "has_phones": 1, "cam_mp": 105, "sale": 0, "warehouse": []int{1, 7, 12, 11}},
 		3: {"vendor": "Samsung", "model": "Galaxy S20", "price": 2500, "color": "yellow", "has_phones": 1, "cam_mp": 105, "sale": 1, "warehouse": []int{2, 3, 5}},
-		4: {"vendor": "Samsung", "model": "Galaxy A5", "price": 800, "color": "black", "has_phones": 1, "cam_mp": 12, "sale": 1, "warehouse": []int{1, 7, 12}},
-		5: {"vendor": "Xiaomi", "model": "MI 9", "price": 500, "color": "black", "has_phones": 1, "cam_mp": 48, "sale": 0, "warehouse": []int{1, 7, 12}},
-		6: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 2000, "color": "white", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 12}},
+		4: {"vendor": "Samsung", "model": "Galaxy A5", "price": 800, "color": "black", "has_phones": 1, "cam_mp": 12, "sale": 1, "warehouse": []int{1, 7, 12, 11}},
+		5: {"vendor": "Xiaomi", "model": "MI 9", "price": 500, "color": "black", "has_phones": 1, "cam_mp": 48, "sale": 0, "warehouse": []int{1, 7, 12, 11}},
+		6: {"vendor": "Apple", "model": "Iphone X Pro Max", "price": 2000, "color": "white", "has_phones": 1, "cam_mp": 40, "sale": 1, "warehouse": []int{1, 7, 12, 11}},
 	}
 	for id, item := range records {
 		_ = storage.AddRecord(id, item)
@@ -104,6 +104,7 @@ func TestQueryWithRange(t *testing.T) {
 	filters := []FilterInterface{
 		NewValueFilter("vendor", []interface{}{"Samsung", "Apple"}),
 		NewRangeFilter("price", NewRangeValue(1000, 5000)),
+		NewValueFilter("warehouse", []int{1, 11}),
 	}
 
 	result, _ := db.Query(NewSearchQuery().Filters(filters))

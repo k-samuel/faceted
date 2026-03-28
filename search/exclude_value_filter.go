@@ -45,24 +45,14 @@ func (f *ExcludeValueFilter) FilterInput(scanner ScannerInterface, inputIdKeys [
 // AddExcluded adds records to the exclude list.
 func (f *ExcludeValueFilter) AddExcluded(scanner ScannerInterface, excludeRecords map[int]struct{}) error {
 
-	var input []int
-
 	if excludeRecords == nil {
 		excludeRecords = make(map[int]struct{})
-		input = make([]int, 0, 0)
-	} else {
-		input = make([]int, 0, len(excludeRecords))
-		for k := range excludeRecords {
-			input = append(input, k)
-		}
 	}
 
-	list, err := scanner.MergeExcludedValues(f.GetFieldName(), f.GetValue())
+	err := scanner.AddExcludedValues(f.GetFieldName(), f.GetValue(), excludeRecords)
 	if err != nil {
 		return err
 	}
-	for _, k := range list {
-		excludeRecords[k] = struct{}{}
-	}
+
 	return nil
 }

@@ -3,7 +3,7 @@ package search
 type ScannerInterface interface {
 	// FindRecordsMap finds records by filters using optimized batch processing.
 	// All filters are processed in a single pass through the data.
-	FindRecords(filters []FilterInterface, inputRecords []int, excludeRecords map[int]struct{}) ([]int, error)
+	FindRecords(filters []FilterInterface, limitRecords []int, excludeRecords map[int]struct{}) ([]int, error)
 
 	// FindExcludeRecordsMap finds records by exclude filters.
 	FindExcludeRecordsMap(filters []ExcludeFilterInterface, excludeRecords map[int]struct{})
@@ -13,7 +13,6 @@ type ScannerInterface interface {
 
 	// Aggregate results
 	AggregationScan(
-		filteredRecords []int,
 		countRecords bool,
 		input []int,
 		exclude map[int]struct{},
@@ -29,12 +28,11 @@ type ScannerInterface interface {
 	GetFieldValueRecords(field string) map[string][]int
 
 	// Filters Actions
-
-	//FindRecordsIntersection(field string, values interface{}, excludeRecords map[int]struct{}) (result []int, err error)
 	IntersectFilterValues(field string, values interface{}, inputRecords []int, excludeRecords map[int]struct{}) ([]int, error)
-	MergeExcludedValues(field string, values interface{}) (result []int, err error)
+	// AddExcludedValues Find records by filters and add them into excludeRecords Map
+	AddExcludedValues(field string, values interface{}, excludeRecords map[int]struct{}) (err error)
 	FindRangeIntersection(field string, value *RangeValue, inputRecords []int, excludeRecords map[int]struct{}) ([]int, error)
 	FindValueIntersection(field string, values interface{}, inputRecords []int, excludeRecords map[int]struct{}) ([]int, error)
-	//FindInRange find records with Range, insert into result map
+	//FindInRange find records with Range
 	FindInRange(field string, value *RangeValue) ([]int, error)
 }

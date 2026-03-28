@@ -273,24 +273,27 @@ func extractQueryParams(r *http.Request, defaultSortValue string) (filters []sea
 		}
 	}
 
-	var priceFrom *int
-	var priceTo *int
-
 	pFromStr := r.FormValue("price_from")
-	if pFromStr != "" {
-		pf, _ := strconv.Atoi(pFromStr)
-		priceFrom = &pf
-	}
-
 	pToStr := r.FormValue("price_to")
-	if pToStr != "" {
-		pt, _ := strconv.Atoi(pToStr)
-		priceTo = &pt
-	}
 
 	// Price range filter
-	if priceFrom != nil || priceTo != nil {
-		filters = append(filters, search.NewRangeFilter("price", search.NewRangeValue(priceFrom, priceTo)))
+	if pFromStr != "" || pToStr != "" {
+		rangeValue := &search.RangeValue{}
+		if pFromStr != "" {
+			priceFrom, err := strconv.Atoi(pFromStr)
+			if err == nil {
+				rangeValue.Min = priceFrom
+			}
+		}
+
+		if pToStr != "" {
+			priceTo, err := strconv.Atoi(pToStr)
+			if err == nil {
+				rangeValue.Max = priceTo
+			}
+		}
+		// Price range filter
+		filters = append(filters, search.NewRangeFilter("price", rangeValue))
 	}
 
 	// Build sort config
