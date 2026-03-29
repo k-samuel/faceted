@@ -38,22 +38,22 @@ func TestRangeListIndexerAdd(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Test adding records with various values
-	err := ri.Add(&indexContainer, 1, []string{"50"})
+	err := ri.Add(indexContainer, 1, []string{"50"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 2, []string{"150"})
+	err = ri.Add(indexContainer, 2, []string{"150"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 3, []string{"550"})
+	err = ri.Add(indexContainer, 3, []string{"550"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 4, []string{"1500"})
+	err = ri.Add(indexContainer, 4, []string{"1500"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -89,7 +89,7 @@ func TestRangeListIndexerAddMultipleValues(t *testing.T) {
 	ri, _ := NewRangeListIndexer([]int{100, 500, 1000})
 	indexContainer := make(map[string][]int)
 
-	err := ri.Add(&indexContainer, 1, []string{"50", "150", "550"})
+	err := ri.Add(indexContainer, 1, []string{"50", "150", "550"})
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -105,7 +105,7 @@ func TestRangeListIndexerAddInvalidValue(t *testing.T) {
 	ri, _ := NewRangeListIndexer([]int{100, 500, 1000})
 	indexContainer := make(map[string][]int)
 
-	err := ri.Add(&indexContainer, 1, []string{"invalid"})
+	err := ri.Add(indexContainer, 1, []string{"invalid"})
 	if err == nil {
 		t.Errorf("Expected error for invalid value")
 	}
@@ -123,7 +123,7 @@ func TestRangeListIndexerOptimize(t *testing.T) {
 	ri.unsortedBuf["0"]["20"] = []int{3}
 	ri.unsortedBuf["0"]["60"] = []int{4, 5}
 
-	ri.Optimize(&indexContainer)
+	ri.Optimize(indexContainer)
 
 	// After optimization, unsortedBuf should be cleared
 	if len(ri.unsortedBuf) != 0 {
@@ -143,7 +143,7 @@ func TestRangeListIndexerOptimizeNoUnsorted(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Should not panic
-	ri.Optimize(&indexContainer)
+	ri.Optimize(indexContainer)
 }
 
 // TestRangeListIndexerDetectRangeKey tests detecting range keys.
@@ -180,13 +180,13 @@ func TestRangeListIndexerEdgeCases(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Test with zero value
-	err := ri.Add(&indexContainer, 1, []string{"0"})
+	err := ri.Add(indexContainer, 1, []string{"0"})
 	if err != nil {
 		t.Errorf("Expected no error for zero value, got %v", err)
 	}
 
 	// Test with large value
-	err = ri.Add(&indexContainer, 2, []string{"999999"})
+	err = ri.Add(indexContainer, 2, []string{"999999"})
 	if err != nil {
 		t.Errorf("Expected no error for large value, got %v", err)
 	}
@@ -203,8 +203,8 @@ func TestRangeListIndexerDuplicateRecords(t *testing.T) {
 	indexContainer := make(map[string][]int)
 
 	// Add same record multiple times
-	ri.Add(&indexContainer, 1, []string{"50"})
-	ri.Add(&indexContainer, 1, []string{"150"})
+	ri.Add(indexContainer, 1, []string{"50"})
+	ri.Add(indexContainer, 1, []string{"150"})
 
 	// Should have 2 ranges
 	if len(indexContainer) != 2 {
@@ -259,7 +259,7 @@ func TestRangeListIndexerUnsortedFlag(t *testing.T) {
 	}
 
 	// After adding, it should be true
-	ri.Add(&indexContainer, 1, []string{"50"})
+	ri.Add(indexContainer, 1, []string{"50"})
 	if !ri.hasUnsorted {
 		t.Errorf("Expected hasUnsorted to be true after adding")
 	}
@@ -270,12 +270,12 @@ func TestRangeListIndexerNegativeValues(t *testing.T) {
 	ri, _ := NewRangeListIndexer([]int{100, 500, 1000})
 	indexContainer := make(map[string][]int)
 
-	err := ri.Add(&indexContainer, 1, []string{"-50"})
+	err := ri.Add(indexContainer, 1, []string{"-50"})
 	if err != nil {
 		t.Errorf("Expected no error for negative value, got %v", err)
 	}
 
-	err = ri.Add(&indexContainer, 2, []string{"-10"})
+	err = ri.Add(indexContainer, 2, []string{"-10"})
 	if err != nil {
 		t.Errorf("Expected no error for negative value, got %v", err)
 	}

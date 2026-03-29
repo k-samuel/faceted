@@ -117,6 +117,7 @@
                 'price_to': priceTo
             }, function (data) {
                 let result = JSON.parse(data);
+                result.filters.data = formatFilterData(result.filters.data)
                 updateFilters('filters', result.filters, initialFilters);
                 showResults('results', result.results);
                 hideLoader('contentLoader');
@@ -127,6 +128,8 @@
             showLoader('contentLoader');
             ajax.post('/filters', { 'filters': [] }, function (data) {
                 let result = JSON.parse(data);
+
+                result.filters.data = formatFilterData(result.filters.data)
                 initialFilters = result.filters.data;
                 showFilters('filters', result.filters, result.titles);
                 showResults('results', result.results);
@@ -136,6 +139,18 @@
             document.getElementById('price_from').value = "";
             document.getElementById('price_to').value = "";
         }
+
+        function formatFilterData(data) {
+            var result = {};
+            data.forEach((filter) => {
+                result[filter.field] = {}
+                filter.values.forEach((val) => {
+                    result[filter.field][val.value] = val.count
+                });
+            });
+            return result
+        }
+
 
         document.addEventListener('DOMContentLoaded', function () {
             loadFilters();

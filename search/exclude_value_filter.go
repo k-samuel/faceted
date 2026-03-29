@@ -36,10 +36,10 @@ func (f *ExcludeValueFilter) HasSelfFiltering() bool {
 }
 
 // FilterInput filters the faceted data (same as ValueFilter for compatibility).
-func (f *ExcludeValueFilter) FilterInput(scanner ScannerInterface, inputIdKeys map[int]struct{}, excludeRecords map[int]struct{}) error {
+func (f *ExcludeValueFilter) FilterInput(scanner ScannerInterface, inputIdKeys []int, excludeRecords map[int]struct{}) ([]int, error) {
 	// For exclude filters, FilterInput is typically not used directly
 	// AddExcluded is used instead to populate excludeRecords
-	return nil
+	panic("Method ExcludeValueFilter::FilterInput should not be called")
 }
 
 // AddExcluded adds records to the exclude list.
@@ -49,9 +49,10 @@ func (f *ExcludeValueFilter) AddExcluded(scanner ScannerInterface, excludeRecord
 		excludeRecords = make(map[int]struct{})
 	}
 
-	err := scanner.FindInValues(f.GetFieldName(), f.GetValue(), excludeRecords)
+	err := scanner.AddExcludedValues(f.GetFieldName(), f.GetValue(), excludeRecords)
 	if err != nil {
 		return err
 	}
+
 	return nil
 }

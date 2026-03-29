@@ -33,16 +33,16 @@ Optimized for high-speed construction of complex aggregates.
 
 Bench Golang (1.25) vs PHP (8.4.4 Opcache JIT, noxdebug) 1M records
 
-|                         | GO         |     PHP   | 
-|:------------------------|-----------:|----------:|
-| Total Memory, Mb        |  134 Mb    | 417 Mb    |
-| Find                    |  0.046206  | 0.022873  |
-| Find & Sort             |  0.055834  | 0.030061  |
-| Find (unsets)           |  0.056746  | 0.030475  |
-| Find (ranges)           |  0.058394  | 0.031425  |
-| Filters                 |  0.143485  | 0.065416  |
-| Filters & count         |  0.321987  | 0.133543  |
-| Filters & count & exc   |  0.409842  | 0.146758  |
+|                         | GO          |     PHP   | 
+|:------------------------|------------:|----------:|
+| Total Memory, Mb        |☑  135 Mb   |   424 Mb   |
+| Find                    |☑  0.012627 |   0.022952 |
+| Find & Sort             |☑  0.025829 |   0.030542 |
+| Find (unsets)           |  0.048186   | ☑ 0.030736|
+| Find (ranges)           |☑  0.028761 |    0.032662|
+| Filters                 |  0.087418   | ☑ 0.070283|
+| Filters & count         |  0.307845   | ☑ 0.137206|
+| Filters & count & exc   |  0.321084   | ☑ 0.154704|
 
 
 

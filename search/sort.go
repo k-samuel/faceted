@@ -25,6 +25,7 @@ func NewSort(fieldName string, direction int, sortType int) *Sort {
 	return &Sort{
 		FieldName: fieldName,
 		Direction: direction,
+		SortType:  sortType,
 	}
 }
 

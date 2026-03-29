@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/k-samuel/faceted/search"
-	"github.com/k-samuel/faceted/search/indexer"
 )
 
 const (
@@ -88,8 +87,8 @@ func main() {
 	storage := db.GetStorage()
 
 	// Add RangeIndexer for price field (same as PHP version with step 250)
-	rangeIndexer, _ := indexer.NewRangeIndexer(250)
-	storage.AddIndexer("price", rangeIndexer)
+	//rangeIndexer, _ := indexer.NewRangeIndexer(250)
+	//storage.AddIndexer("price", rangeIndexer)
 
 	// Add records to index
 	fmt.Println("Indexing records...")

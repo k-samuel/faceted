@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -52,6 +51,7 @@ var filterTitles = map[string]string{
 // List of field for numer sort
 var numberFields = map[string]struct{}{
 	"price_range": {},
+	"price":       {},
 	"hd":          {},
 	"diagonal":    {},
 	"battery":     {},
@@ -146,16 +146,17 @@ func main() {
 			}
 		}
 
+		dataCopy := make([]*search.AggregationResultField, 0, len(data))
 		// Exclude fields that should not be used to filter data.
-		for f := range data {
+		for _, f := range data {
 			// check if field exists in db
-			if _, ok := filterTitles[f]; !ok {
-				delete(data, f)
+			if _, ok := filterTitles[f.Field]; ok {
+				dataCopy = append(dataCopy, f)
 			}
 		}
 
 		result := map[string]interface{}{
-			"filters": map[string]interface{}{"data": data, "price_step": 200},
+			"filters": map[string]interface{}{"data": dataCopy, "price_step": 200},
 			"results": map[string]interface{}{"data": resultItems, "count": len(productData), "limit": pageLimit},
 			"titles":  filterTitles,
 		}
@@ -273,22 +274,27 @@ func extractQueryParams(r *http.Request, defaultSortValue string) (filters []sea
 		}
 	}
 
-	priceFrom := 0
-	priceTo := math.MaxInt64
-
 	pFromStr := r.FormValue("price_from")
-	if pFromStr != "" {
-		priceFrom, _ = strconv.Atoi(pFromStr)
-	}
-
 	pToStr := r.FormValue("price_to")
-	if pToStr != "" {
-		priceTo, _ = strconv.Atoi(pToStr)
-	}
 
 	// Price range filter
-	if priceFrom > 0 || priceTo > 0 {
-		filters = append(filters, search.NewRangeFilter("price", search.NewRangeValue(priceFrom, priceTo)))
+	if pFromStr != "" || pToStr != "" {
+		rangeValue := &search.RangeValue{}
+		if pFromStr != "" {
+			priceFrom, err := strconv.Atoi(pFromStr)
+			if err == nil {
+				rangeValue.Min = priceFrom
+			}
+		}
+
+		if pToStr != "" {
+			priceTo, err := strconv.Atoi(pToStr)
+			if err == nil {
+				rangeValue.Max = priceTo
+			}
+		}
+		// Price range filter
+		filters = append(filters, search.NewRangeFilter("price", rangeValue))
 	}
 
 	// Build sort config

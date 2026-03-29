@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"testing"
 )
 
@@ -15,15 +16,23 @@ func TestScannerGetAllRecordIdMap(t *testing.T) {
 	_ = storage.AddRecord(3, map[string]interface{}{"col": 2, "pr": 1, "dr": 2})
 
 	scanner := db.GetScanner()
-	result := scanner.GetAllRecordIdMap()
+	result := scanner.GetAllRecordId(nil, nil)
 
-	expected := map[int]bool{1: true, 2: true, 3: true}
+	expected := []int{1, 2, 3}
 	if len(result) != len(expected) {
 		t.Errorf("Expected %d records, got %d", len(expected), len(result))
 	}
-	for id := range expected {
-		if _, ok := result[id]; !ok {
-			t.Errorf("Missing record %d", id)
-		}
+
+	if !slices.Equal(expected, result) {
+		t.Errorf("Expected slices to be equal")
+	}
+
+}
+
+func TestDeduplicate(t *testing.T) {
+	list := []int{1, 3, 4, 4, 4}
+	list = Deduplicate(list)
+	if !slices.Equal(list, []int{1, 3, 4}) {
+		t.Errorf("Expected slices to be equal")
 	}
 }

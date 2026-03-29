@@ -8,7 +8,7 @@ type FilterInterface interface {
 	// scan: scanner storage.ScannerInterface  Storage scanner
 	// inputIdKeys: map[recordId]bool - input record IDs (modified in place)
 	// excludeRecords: map[recordId]bool - records to exclude
-	FilterInput(scanner ScannerInterface, inputIdKeys map[int]struct{}, excludeRecords map[int]struct{}) error
+	FilterInput(scanner ScannerInterface, inputIdKeys []int, excludeRecords map[int]struct{}) ([]int, error)
 	// HasSelfFiltering returns the self-filtering flag.
 	HasSelfFiltering() bool
 }

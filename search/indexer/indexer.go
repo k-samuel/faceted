@@ -8,8 +8,8 @@ type IndexerInterface interface {
 	// indexContainer: the field's index data structure
 	// recordId: the ID of the record to add
 	// values: the field values for this record
-	Add(indexContainer *map[string][]int, recordId int, values []string) error
+	Add(indexContainer map[string][]int, recordId int, values []string) error
 
 	// Optimize optimizes the index data structures after all records are added.
-	Optimize(indexContainer *map[string][]int)
+	Optimize(indexContainer map[string][]int)
 }

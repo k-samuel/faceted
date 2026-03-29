@@ -54,8 +54,8 @@ func TestAggregationSort(t *testing.T) {
 
 	expectedKeys := []string{"color", "group", "size"}
 	actualKeys := make([]string, 0, len(result))
-	for k := range result {
-		actualKeys = append(actualKeys, k)
+	for _, field := range result {
+		actualKeys = append(actualKeys, field.Field)
 	}
 	sortStringSlice(actualKeys)
 
@@ -67,8 +67,8 @@ func TestAggregationSort(t *testing.T) {
 	resultDesc, _ := db.Aggregate(NewAggregationQuery().CountItems(true).Sort(SortDesc, SortDesc))
 
 	actualKeysDesc := make([]string, 0, len(resultDesc))
-	for k := range resultDesc {
-		actualKeysDesc = append(actualKeysDesc, k)
+	for _, field := range resultDesc {
+		actualKeysDesc = append(actualKeysDesc, field.Field)
 	}
 	sortStringSlice(actualKeysDesc)
 
