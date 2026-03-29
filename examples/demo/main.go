@@ -51,6 +51,7 @@ var filterTitles = map[string]string{
 // List of field for numer sort
 var numberFields = map[string]struct{}{
 	"price_range": {},
+	"price":       {},
 	"hd":          {},
 	"diagonal":    {},
 	"battery":     {},

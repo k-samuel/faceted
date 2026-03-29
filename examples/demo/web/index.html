@@ -131,8 +131,7 @@
 
                 result.filters.data = formatFilterData(result.filters.data)
                 initialFilters = result.filters.data;
-                result.filters.data =
-                    showFilters('filters', result.filters, result.titles);
+                showFilters('filters', result.filters, result.titles);
                 showResults('results', result.results);
                 showSort('sortSelect', result.filters.data, result.titles);
                 hideLoader('contentLoader');

@@ -5,6 +5,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/k-samuel/faceted/search/value"
 )
 
 // Index implements IndexInterface for faceted search.
@@ -71,7 +73,7 @@ func (i *Db) Query(q *SearchQuery) ([]int, error) {
 
 	if order != nil && len(res) > 1 {
 		velueMap := i.scanner.GetFieldValueRecords(order.GetField())
-		result := sortQuery(velueMap, res, order)
+		result := sortQuery(velueMap, res, order, i.storage.GetValueConverter())
 		return result, nil
 	}
 
@@ -263,51 +265,38 @@ func sortAggregarion(sortConfig *AggregationSort, result []*AggregationResultFie
 	}
 }
 
-// sortValuesAscending sorts values in ascending order.
-func sortValues(values map[string]interface{}, reverse bool) map[string]interface{} {
-	keys := make([]string, 0, len(values))
-	for k := range values {
-		keys = append(keys, k)
-	}
-
-	if reverse {
-		slices.SortStableFunc(keys, func(i, j string) int {
-			return strings.Compare(j, i)
-		})
-	} else {
-		slices.SortStableFunc(keys, func(i, j string) int {
-			return strings.Compare(i, j)
-		})
-	}
-
-	sortedValues := make(map[string]interface{})
-	for _, k := range keys {
-		sortedValues[k] = values[k]
-	}
-	return sortedValues
-}
-
 // Sort sorts results by field value.
 
-func sortQuery(values map[string][]int, results []int, order *Sort) []int {
+func sortQuery(values map[string][]int, results []int, order *Sort, vc value.ConverterInterface) []int {
 
 	// Determine sort type and create typed slice for efficient sorting
-
 	sortedValues := make([]string, len(values))
 	for k := range values {
 		sortedValues = append(sortedValues, k)
 	}
 
 	if order.GetDirection() == SortAsc {
-		slices.SortStableFunc(sortedValues, func(i, j string) int {
-			return strings.Compare(i, j)
-		})
+		if order.SortType == SortTypeNumbers {
+			slices.SortStableFunc(sortedValues, func(i, j string) int {
+				return vc.CompareNumStrings(i, j)
+			})
+		} else {
+			slices.SortStableFunc(sortedValues, func(i, j string) int {
+				return strings.Compare(i, j)
+			})
+		}
 
 	} else {
 		// Descending order
-		slices.SortStableFunc(sortedValues, func(i, j string) int {
-			return strings.Compare(j, i)
-		})
+		if order.SortType == SortTypeNumbers {
+			slices.SortStableFunc(sortedValues, func(i, j string) int {
+				return vc.CompareNumStrings(j, i)
+			})
+		} else {
+			slices.SortStableFunc(sortedValues, func(i, j string) int {
+				return strings.Compare(j, i)
+			})
+		}
 	}
 
 	// Build sorted result
