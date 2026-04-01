@@ -141,10 +141,19 @@ func (sc *MapScanner) AggregationScan(
 
 	result := make([]*AggregationResultField, 0, 0)
 
+	// filter results cache
+	filtersCache := make(map[string][]int, len(filters))
+
 	// Index filters by field name
 	indexedFilters := make(map[string]FilterInterface)
 	for _, f := range filters {
 		indexedFilters[f.GetFieldName()] = f
+		recordIds, err := sc.FindRecords([]FilterInterface{f}, input, exclude)
+		if err != nil {
+			return result, err
+		}
+
+		filtersCache[f.GetFieldName()] = recordIds
 	}
 
 	data := sc.storage.GetData()
@@ -193,18 +202,15 @@ func (sc *MapScanner) AggregationScan(
 		}
 
 		var recordIds []int
+		_, hasFilter := indexedFilters[filterName]
 		// Single filter - no need to merge
-		if needSelfFiltering {
+		if needSelfFiltering || !hasFilter {
 			recordIds = filteredData
 		} else {
-			if _, ok := indexedFilters[filterName]; !ok {
-				// no filters for field, use filteredData
-				recordIds = filteredData
+			if len(filtersCache) > 1 {
+				recordIds = mergeFiltersCache(filtersCache, filterName)
 			} else {
-				// copy hash map
-				filtersCopy := copyFilterMap(indexedFilters)
-				delete(filtersCopy, filterName)
-				recordIds, err = sc.FindRecords(extractFilters(filtersCopy), input, exclude)
+				recordIds, err = sc.FindRecords([]FilterInterface{}, input, exclude)
 				if err != nil {
 					return nil, err
 				}
@@ -231,6 +237,23 @@ func (sc *MapScanner) AggregationScan(
 		}
 	}
 	return result, nil
+}
+
+func mergeFiltersCache(cache map[string][]int, skipKey string) []int {
+	result := make([]int, 0, 100)
+	start := true
+	for f, d := range cache {
+		if f == skipKey {
+			continue
+		}
+		if start {
+			result = append(result, d...)
+			start = false
+			continue
+		}
+		result = IntersectSortedInt(result, d)
+	}
+	return result
 }
 
 // getValues returns all values from index.
@@ -726,6 +749,7 @@ func countIntersectionSortedInt(a, b []int) int {
 		}
 	}
 	return result
+
 }
 
 // IntersectCountSortedInt get intersect count for sorted int slices
@@ -759,20 +783,4 @@ func hasIntersectionSortedInt(a, b []int) bool {
 		}
 	}
 	return false
-}
-
-func copyFilterMap(input map[string]FilterInterface) map[string]FilterInterface {
-	result := make(map[string]FilterInterface)
-	for k, v := range input {
-		result[k] = v
-	}
-	return result
-}
-
-func extractFilters(filters map[string]FilterInterface) []FilterInterface {
-	var result = make([]FilterInterface, 0, len(filters))
-	for _, filter := range filters {
-		result = append(result, filter)
-	}
-	return result
 }
