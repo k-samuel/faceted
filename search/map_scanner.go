@@ -143,6 +143,7 @@ func (sc *MapScanner) AggregationScan(
 
 	// filter results cache
 	filtersCache := make(map[string][]int, len(filters))
+	filtersOrder := make([]string, 0, len(filters))
 
 	// Index filters by field name
 	indexedFilters := make(map[string]FilterInterface)
@@ -154,6 +155,7 @@ func (sc *MapScanner) AggregationScan(
 		}
 
 		filtersCache[f.GetFieldName()] = recordIds
+		filtersOrder = append(filtersOrder, f.GetFieldName())
 	}
 
 	data := sc.storage.GetData()
@@ -182,12 +184,6 @@ func (sc *MapScanner) AggregationScan(
 		// Process filter values with optimized intersection
 		fieldResult := make([]*AggregationResultValue, 0, len(filterValues))
 
-		// Check if self-filtering is needed
-		needSelfFiltering = selfFiltering
-		if f, ok := indexedFilters[filterName]; ok && f.HasSelfFiltering() {
-			needSelfFiltering = true
-		}
-
 		// fast path
 		if len(filters) == 0 && len(input) == 0 {
 			for val, list := range filterValues {
@@ -201,6 +197,12 @@ func (sc *MapScanner) AggregationScan(
 			continue
 		}
 
+		// Check if self-filtering is needed
+		needSelfFiltering = selfFiltering
+		if f, ok := indexedFilters[filterName]; ok && f.HasSelfFiltering() {
+			needSelfFiltering = true
+		}
+
 		var recordIds []int
 		_, hasFilter := indexedFilters[filterName]
 		// Single filter - no need to merge
@@ -208,7 +210,7 @@ func (sc *MapScanner) AggregationScan(
 			recordIds = filteredData
 		} else {
 			if len(filtersCache) > 1 {
-				recordIds = mergeFiltersCache(filtersCache, filterName)
+				recordIds = mergeFiltersCache(filtersCache, filterName, filtersOrder)
 			} else {
 				recordIds, err = sc.FindRecords([]FilterInterface{}, input, exclude)
 				if err != nil {
@@ -239,19 +241,20 @@ func (sc *MapScanner) AggregationScan(
 	return result, nil
 }
 
-func mergeFiltersCache(cache map[string][]int, skipKey string) []int {
+func mergeFiltersCache(cache map[string][]int, skipKey string, filtersOrder []string) []int {
 	result := make([]int, 0, 100)
 	start := true
-	for f, d := range cache {
-		if f == skipKey {
+	for _, name := range filtersOrder {
+		if name == skipKey {
 			continue
 		}
+
 		if start {
-			result = append(result, d...)
+			result = append(result, cache[name]...)
 			start = false
 			continue
 		}
-		result = IntersectSortedInt(result, d)
+		result = IntersectSortedInt(result, cache[name])
 	}
 	return result
 }
@@ -749,7 +752,6 @@ func countIntersectionSortedInt(a, b []int) int {
 		}
 	}
 	return result
-
 }
 
 // IntersectCountSortedInt get intersect count for sorted int slices
