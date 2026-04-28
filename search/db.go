@@ -266,11 +266,10 @@ func sortAggregarion(sortConfig *AggregationSort, result []*AggregationResultFie
 }
 
 // Sort sorts results by field value.
-
 func sortQuery(values map[string][]int, results []int, order *Sort, vc value.ConverterInterface) []int {
 
-	// Determine sort type and create typed slice for efficient sorting
-	sortedValues := make([]string, len(values))
+	// Collect and sort field values
+	sortedValues := make([]string, 0, len(values))
 	for k := range values {
 		sortedValues = append(sortedValues, k)
 	}
@@ -300,7 +299,7 @@ func sortQuery(values map[string][]int, results []int, order *Sort, vc value.Con
 	}
 
 	// Build sorted result
-	sorted := make([]int, 0)
+	sorted := make([]int, 0, len(results))
 	processed := make(map[int]struct{}, len(results))
 	for _, k := range results {
 		processed[k] = struct{}{}
@@ -310,7 +309,6 @@ func sortQuery(values map[string][]int, results []int, order *Sort, vc value.Con
 		records := values[value]
 		if order.GetDirection() == SortAsc {
 			for _, recId := range records {
-
 				if _, ok := processed[recId]; ok {
 					sorted = append(sorted, recId)
 					delete(processed, recId)
