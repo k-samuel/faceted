@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/k-samuel/faceted/search/indexer"
@@ -14,6 +15,7 @@ type MapStorage struct {
 	converter    value.ConverterInterface
 	recordCount  int
 	needOptimize bool
+	sortedKeys   map[string][]string // cache of sorted field value keys
 }
 
 // NewStorage creates a new ArrayStorage.
@@ -23,6 +25,7 @@ func NewMapStorage(converter value.ConverterInterface) *MapStorage {
 		indexers:     make(map[string]indexer.IndexerInterface),
 		converter:    converter,
 		needOptimize: false,
+		sortedKeys:   make(map[string][]string),
 	}
 }
 
@@ -98,6 +101,7 @@ func (s *MapStorage) SetData(data map[string]map[string][]int) {
 	s.data = data
 	// recalculete total count
 	s.RecalculateTotalCount()
+	s.Optimize()
 }
 
 // GetFieldData returns field data section from index.
@@ -146,7 +150,7 @@ func (s *MapStorage) Optimize() {
 		s.data[fieldName] = fieldData
 	}
 
-	// Sort records by ID and values by record count
+	// Sort records by ID and build sorted keys cache
 	for fieldName, valueList := range s.data {
 		// Count records per value
 		for _, list := range valueList {
@@ -155,8 +159,29 @@ func (s *MapStorage) Optimize() {
 				sort.Ints(list)
 			}
 		}
+
+		// Build sorted keys cache
+		keys := make([]string, 0, len(valueList))
+		for k := range valueList {
+			keys = append(keys, k)
+		}
+		slices.SortFunc(keys, func(a, b string) int {
+			return s.converter.CompareNumStrings(a, b)
+		})
+		s.sortedKeys[fieldName] = keys
 	}
 	s.needOptimize = false
+}
+
+// GetSortedFieldValues returns cached sorted field values.
+func (s *MapStorage) GetSortedFieldValues(field string) []string {
+	if s.needOptimize {
+		s.Optimize()
+	}
+	if keys, ok := s.sortedKeys[field]; ok {
+		return keys
+	}
+	return nil
 }
 
 // DeleteRecord deletes a record from the index.

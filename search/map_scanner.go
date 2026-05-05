@@ -242,14 +242,16 @@ func (sc *MapScanner) AggregationScan(
 }
 
 func mergeFiltersCache(cache map[string][]int, skipKey string, filtersOrder []string) []int {
-	result := make([]int, 0, 100)
+	var result []int
 	start := true
+
 	for _, name := range filtersOrder {
 		if name == skipKey {
 			continue
 		}
 
 		if start {
+			result = make([]int, 0, len(cache[name]))
 			result = append(result, cache[name]...)
 			start = false
 			continue
@@ -339,18 +341,7 @@ func (sc *MapScanner) GetFieldValueRecords(field string) map[string][]int {
 }
 
 func (sc *MapScanner) GetSortedFieldValues(field string) []string {
-
-	data := sc.storage.GetFieldData(field)
-	list := make([]string, 0, len(data))
-	for k := range data {
-		list = append(list, k)
-	}
-
-	// sort values
-	slices.SortFunc(list, func(a, b string) int {
-		return sc.storage.converter.CompareNumStrings(a, b)
-	})
-	return list
+	return sc.storage.GetSortedFieldValues(field)
 }
 
 func (sc *MapScanner) IntersectFilterValues(field string, values interface{}, input []int, excludeRecords map[int]struct{}) (result []int, err error) {
@@ -462,13 +453,33 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 
 	data := sc.GetFieldValueRecords(field)
 	sortedValues := sc.GetSortedFieldValues(field)
+	if len(sortedValues) == 0 {
+		return []int{}, nil
+	}
 
-	var limitMap map[int]struct{}
-	var list map[int]struct{}
+	// Binary search for range boundaries
+	startIdx := 0
+	if hasMin {
+		startIdx = sort.Search(len(sortedValues), func(i int) bool {
+			return sc.storage.converter.CompareNumStrings(sortedValues[i], minValue) >= 0
+		})
+	}
+
+	endIdx := len(sortedValues)
+	if hasMax {
+		endIdx = sort.Search(len(sortedValues), func(i int) bool {
+			return sc.storage.converter.CompareNumStrings(sortedValues[i], maxValue) > 0
+		})
+	}
+
+	if startIdx >= endIdx {
+		return []int{}, nil
+	}
 
 	hasExclude := len(excludeRecords) > 0
 	hasLimit := len(limitRecords) > 0
 
+	var limitMap map[int]struct{}
 	if hasLimit {
 		limitMap = make(map[int]struct{}, len(limitRecords))
 		for _, v := range limitRecords {
@@ -476,27 +487,13 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 		}
 	}
 
-	for _, value := range sortedValues {
+	// Collect unique record IDs using map (faster than merge+dedup for many ranges)
+	resultMap := make(map[int]struct{})
 
-		if hasMin && sc.storage.converter.CompareNumStrings(value, minValue) == -1 {
-			continue
-		}
-
-		if hasMax && sc.storage.converter.CompareNumStrings(value, maxValue) == 1 {
-			break
-		}
-
-		records := data[value]
-		if list == nil {
-			list = make(map[int]struct{}, len(records))
-		}
+	for i := startIdx; i < endIdx; i++ {
+		records := data[sortedValues[i]]
 
 		for _, recId := range records {
-
-			if _, ok := list[recId]; ok {
-				continue
-			}
-
 			if hasExclude {
 				if _, ok := excludeRecords[recId]; ok {
 					continue
@@ -507,17 +504,17 @@ func (sc *MapScanner) FindRangeIntersection(field string, value *RangeValue, lim
 					continue
 				}
 			}
-			list[recId] = struct{}{}
+			resultMap[recId] = struct{}{}
 		}
 	}
 
-	res := make([]int, 0, len(list))
-	for k := range list {
-		res = append(res, k)
+	result = make([]int, 0, len(resultMap))
+	for k := range resultMap {
+		result = append(result, k)
 	}
-	slices.Sort(res)
+	slices.Sort(result)
 
-	return res, nil
+	return result, nil
 }
 
 func (sc *MapScanner) FindValueIntersection(field string, values interface{}, inputRecords []int, excludeRecords map[int]struct{}) (result []int, err error) {

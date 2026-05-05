@@ -40,4 +40,7 @@ type StorageInterface interface {
 
 	// GetValueConverter
 	GetValueConverter() value.ConverterInterface
+
+	// Get sorted list of field values numeric sorted useful for range operations
+	GetSortedFieldValues(field string) []string
 }
